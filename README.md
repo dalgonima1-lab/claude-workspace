@@ -13,7 +13,15 @@ claude-workspace/
 
 ## 시작하기
 
-```bash
+```powershell
 cd C:\Users\Wonje\projects\claude-workspace
 claude
+```
+
+## 스크립트 사용법
+
+새 프롬프트 파일 빠르게 만들기:
+
+```powershell
+.\scripts\새-프롬프트-만들기.ps1 "번역-요청"
 ```

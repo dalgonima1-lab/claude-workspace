@@ -1,0 +1,18 @@
+# 운영체제
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 에디터
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 임시 파일
+*.tmp
+*.log
+
+# 비밀 정보 (절대 커밋하지 않기)
+.env
+secrets.txt
