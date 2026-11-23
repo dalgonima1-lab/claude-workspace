@@ -85,7 +85,10 @@ data class DraftReplyRequest(val analysis: Analysis, val tone: String = "formal"
 data class DraftReplyResponse(val reply: String)
 
 @Serializable
-data class HealthResponse(val ok: Boolean, val model: String = "", val problem: String? = null)
+data class HealthResponse(val ok: Boolean, val model: String = "", val transcribe: Boolean = false, val problem: String? = null)
 
 @Serializable
 data class ErrorResponse(val error: String = "오류")
+
+@Serializable
+data class TranscribeResponse(val text: String = "", val model: String = "")

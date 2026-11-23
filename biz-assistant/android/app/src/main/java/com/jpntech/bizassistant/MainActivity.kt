@@ -1,6 +1,9 @@
 package com.jpntech.bizassistant
 
 import android.content.ClipboardManager
+import android.content.Intent
+import androidx.compose.runtime.LaunchedEffect
+import com.jpntech.bizassistant.recordings.EXTRA_PENDING_ID
 import android.os.Bundle
 import androidx.compose.runtime.mutableStateOf
 import androidx.activity.ComponentActivity
@@ -57,6 +60,19 @@ private val destinations = listOf(
 class MainActivity : ComponentActivity() {
     /** 창이 앞으로 올 때 읽은 클립보드 글. 통화 요약을 복사해 오면 오늘 화면이 먼저 제안한다. */
     private val clipboardText = mutableStateOf<String?>(null)
+    /** 알림을 눌러 들어온 대기함 id. 화면이 뜨면 바로 확인 카드로 연다. */
+    private val pendingToOpen = mutableStateOf<Long?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        readPendingExtra(intent)
+    }
+
+    private fun readPendingExtra(intent: Intent?) {
+        val id = intent?.getLongExtra(EXTRA_PENDING_ID, -1L) ?: -1L
+        if (id > 0) pendingToOpen.value = id
+    }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
@@ -76,18 +92,27 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        readPendingExtra(intent)
         setContent {
             val sizeClass = calculateWindowSizeClass(this)
             val expanded = sizeClass.widthSizeClass != WindowWidthSizeClass.Compact
             val clip by clipboardText
-            BizTheme { MainScaffold(expanded = expanded, confirmVm = confirmVm, clipboard = clip, onClipboardHandled = { clipboardText.value = null }) }
+            val pending by pendingToOpen
+            BizTheme { MainScaffold(expanded = expanded, confirmVm = confirmVm, clipboard = clip, onClipboardHandled = { clipboardText.value = null }, pendingToOpen = pending, onPendingOpened = { pendingToOpen.value = null }) }
         }
     }
 }
 
 @Composable
-private fun MainScaffold(expanded: Boolean, confirmVm: ConfirmViewModel, clipboard: String?, onClipboardHandled: () -> Unit) {
+private fun MainScaffold(expanded: Boolean, confirmVm: ConfirmViewModel, clipboard: String?, onClipboardHandled: () -> Unit, pendingToOpen: Long?, onPendingOpened: () -> Unit) {
     val nav = rememberNavController()
+    LaunchedEffect(pendingToOpen) {
+        if (pendingToOpen != null) {
+            confirmVm.openPending(pendingToOpen)
+            nav.navigate("confirm")
+            onPendingOpened()
+        }
+    }
     val backStack by nav.currentBackStackEntryAsState()
     val current = backStack?.destination?.route
     val showChrome = current in destinations.map { it.route }
@@ -149,6 +174,7 @@ private fun AppNavHost(nav: NavHostController, expanded: Boolean, confirmVm: Con
                     nav.navigate("confirm")
                 },
                 onDismissClipboard = onClipboardHandled,
+                onOpenPending = { id -> confirmVm.openPending(id); nav.navigate("confirm") },
             )
         }
         composable("orgs") { OrgsScreen(expanded = expanded) }

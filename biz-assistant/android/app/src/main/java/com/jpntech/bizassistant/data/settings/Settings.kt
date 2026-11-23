@@ -24,6 +24,12 @@ data class AppSettings(
     val calendarId: Long = -1L,
     val remindersEnabled: Boolean = true,
     val sensitiveKeywords: String = "",
+    /** 통화 녹음을 자동으로 글자로 바꿔 정리할지 */
+    val autoProcess: Boolean = false,
+    /** 자동 처리 결과를 확인 없이 바로 등록할지 */
+    val autoRegister: Boolean = false,
+    /** 이 시각 이후에 생긴 녹음만 처리한다 (켠 시점) */
+    val autoSince: Long = 0L,
 )
 
 class SettingsStore(private val context: Context) {
@@ -34,6 +40,9 @@ class SettingsStore(private val context: Context) {
         val calendarId = longPreferencesKey("calendar_id")
         val remindersEnabled = booleanPreferencesKey("reminders_enabled")
         val sensitiveKeywords = stringPreferencesKey("sensitive_keywords")
+        val autoProcess = booleanPreferencesKey("auto_process")
+        val autoRegister = booleanPreferencesKey("auto_register")
+        val autoSince = longPreferencesKey("auto_since")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -44,6 +53,9 @@ class SettingsStore(private val context: Context) {
             calendarId = p[Keys.calendarId] ?: -1L,
             remindersEnabled = p[Keys.remindersEnabled] ?: true,
             sensitiveKeywords = p[Keys.sensitiveKeywords] ?: "",
+            autoProcess = p[Keys.autoProcess] ?: false,
+            autoRegister = p[Keys.autoRegister] ?: false,
+            autoSince = p[Keys.autoSince] ?: 0L,
         )
     }
 
@@ -58,6 +70,9 @@ class SettingsStore(private val context: Context) {
             p[Keys.calendarId] = next.calendarId
             p[Keys.remindersEnabled] = next.remindersEnabled
             p[Keys.sensitiveKeywords] = next.sensitiveKeywords
+            p[Keys.autoProcess] = next.autoProcess
+            p[Keys.autoRegister] = next.autoRegister
+            p[Keys.autoSince] = next.autoSince
         }
     }
 }

@@ -39,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import com.jpntech.bizassistant.BizApp
 import com.jpntech.bizassistant.data.settings.AppSettings
 import com.jpntech.bizassistant.data.settings.ENTITIES
+import com.jpntech.bizassistant.recordings.RecordingWatcher
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jpntech.bizassistant.ui.common.AssistantBand
 import com.jpntech.bizassistant.ui.common.SectionTitle
 import com.jpntech.bizassistant.ui.common.voice
@@ -56,6 +58,9 @@ fun SettingsScreen() {
     var entity by remember { mutableStateOf(ENTITIES.first()) }
     var calendarId by remember { mutableStateOf(-1L) }
     var reminders by remember { mutableStateOf(true) }
+    var autoProcess by remember { mutableStateOf(false) }
+    var autoRegister by remember { mutableStateOf(false) }
+    val recentRecordings by remember { app.repository.db.recordings().recent(3) }.collectAsStateWithLifecycle(emptyList())
     var status by remember { mutableStateOf<String?>(null) }
     var statusOk by remember { mutableStateOf(false) }
     var calendars by remember { mutableStateOf(app.calendar.listCalendars()) }
@@ -64,9 +69,18 @@ fun SettingsScreen() {
         val s = app.settings.current()
         loaded = s
         serverUrl = s.serverUrl; token = s.appToken; entity = s.defaultEntity; calendarId = s.calendarId; reminders = s.remindersEnabled
+        autoProcess = s.autoProcess; autoRegister = s.autoRegister
     }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         calendars = app.calendar.listCalendars()
+    }
+    val audioPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
+        val ok = granted[RecordingWatcher.audioPermission()] == true
+        autoProcess = ok
+        scope.launch {
+            app.settings.update { it.copy(autoProcess = ok, autoSince = if (ok && it.autoSince == 0L) System.currentTimeMillis() else it.autoSince) }
+            if (ok) RecordingWatcher.ensureScheduled(app)
+        }
     }
 
     val sentence = when {
@@ -75,7 +89,8 @@ fun SettingsScreen() {
         !app.calendar.hasPermission() -> "서버 토큰은 있습니다. 이제 {캘린더 권한}을 허용하면 일정을 삼성 캘린더에 넣을 수 있습니다."
         calendars.isEmpty() -> "캘린더 권한은 있는데 쓸 수 있는 캘린더가 보이지 않습니다. 삼성 캘린더에서 계정을 확인해 주세요."
         status != null && statusOk -> "{연결 정상}입니다. 기본 소속은 {$entity}, 일정은 ${calendars.firstOrNull { it.id == calendarId }?.name?.let { "{$it}" } ?: "첫 번째 캘린더"}에 넣습니다."
-        else -> "준비가 되어 있습니다. 기본 소속은 {$entity}이고, 바뀐 것이 있으면 아래에서 저장해 주세요."
+        !autoProcess -> "준비가 되어 있습니다. {통화 녹음 자동 정리}를 켜면 통화가 끝날 때마다 제가 먼저 정리해 두겠습니다."
+        else -> "자동 정리가 켜져 있습니다. 통화가 끝나면 ${if (autoRegister) "{바로 등록}하고" else "{대기함}에 넣고"} 알림으로 알려 드립니다."
     }
     val chipColors = FilterChipDefaults.filterChipColors(selectedContainerColor = BizColors.SignalSoft, selectedLabelColor = BizColors.Signal, containerColor = Color.Transparent, labelColor = BizColors.Muted)
 
@@ -137,6 +152,46 @@ fun SettingsScreen() {
                     Text("기한 전날 아침 9시에 알려 드립니다.", style = MaterialTheme.typography.bodySmall, color = BizColors.Muted)
                 }
                 Switch(checked = reminders, onCheckedChange = { reminders = it })
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionTitle("통화 녹음 자동 정리")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("통화가 끝나면 녹음을 글자로 바꿔 정리", style = MaterialTheme.typography.bodyMedium, color = BizColors.Text)
+                        Text("전화 앱의 통화 자동 녹음이 켜져 있어야 합니다. 준비되면 알림이 옵니다.", style = MaterialTheme.typography.bodySmall, color = BizColors.Muted)
+                    }
+                    Switch(checked = autoProcess, onCheckedChange = { on ->
+                        if (on) {
+                            val perms = mutableListOf(RecordingWatcher.audioPermission())
+                            if (android.os.Build.VERSION.SDK_INT >= 33) perms += Manifest.permission.POST_NOTIFICATIONS
+                            audioPermissionLauncher.launch(perms.toTypedArray())
+                        } else {
+                            autoProcess = false
+                            scope.launch { app.settings.update { it.copy(autoProcess = false) }; RecordingWatcher.cancel(app) }
+                        }
+                    })
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("확인 없이 바로 등록", style = MaterialTheme.typography.bodyMedium, color = BizColors.Text)
+                        Text("끄면 대기함에 넣고 알림만 보냅니다.", style = MaterialTheme.typography.bodySmall, color = BizColors.Muted)
+                    }
+                    Switch(checked = autoRegister, enabled = autoProcess, onCheckedChange = { v -> autoRegister = v; scope.launch { app.settings.update { it.copy(autoRegister = v) } } })
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { RecordingWatcher.runNow(app); status = "녹음 폴더를 확인하고 있습니다"; statusOk = true }, enabled = autoProcess) { Text("지금 녹음 확인") }
+                    OutlinedButton(onClick = {
+                        val i = android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, android.net.Uri.parse("package:" + app.packageName))
+                        runCatching { app.startActivity(i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    }) { Text("배터리 최적화 제외") }
+                }
+                if (recentRecordings.isNotEmpty()) {
+                    recentRecordings.forEach { r ->
+                        val label = when (r.status) { "done" -> "처리 완료"; "processing" -> "처리 중"; "empty" -> "말소리 없음"; "skipped" -> "사업 무관"; "error" -> "실패: ${r.error ?: ""}"; else -> r.status }
+                        Text("${r.displayName}  $label", style = MaterialTheme.typography.bodySmall, color = if (r.status == "error") BizColors.Amber else BizColors.Muted)
+                    }
+                }
             }
 
             Button(

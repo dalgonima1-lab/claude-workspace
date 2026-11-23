@@ -7,6 +7,7 @@ import com.jpntech.bizassistant.data.db.AppDatabase
 import com.jpntech.bizassistant.data.remote.RelayApi
 import com.jpntech.bizassistant.data.settings.SettingsStore
 import com.jpntech.bizassistant.reminders.ReminderScheduler
+import com.jpntech.bizassistant.recordings.RecordingWatcher
 import com.jpntech.bizassistant.reminders.ensureNotificationChannel
 
 class BizApp : Application() {
@@ -27,6 +28,7 @@ class BizApp : Application() {
         )
         repository = Repository(AppDatabase.build(this), api, settings, calendar, ReminderScheduler(this))
         ensureNotificationChannel(this)
+        RecordingWatcher.ensureScheduled(this)
     }
 
     companion object {

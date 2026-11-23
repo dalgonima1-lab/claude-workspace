@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.jpntech.bizassistant.data.ConfirmDraft
 import com.jpntech.bizassistant.data.Repository
 import com.jpntech.bizassistant.data.SaveResult
+import com.jpntech.bizassistant.data.remote.Analysis
 import com.jpntech.bizassistant.data.remote.RelayException
+import kotlinx.serialization.json.Json
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -23,8 +25,25 @@ sealed interface ConfirmState {
 class ConfirmViewModel(private val repo: Repository) : ViewModel() {
     private val _state = MutableStateFlow<ConfirmState>(ConfirmState.Idle)
     val state: StateFlow<ConfirmState> = _state
+    private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
+    /** 대기함에서 연 건이면 그 id. 저장하거나 버리면 대기함에서 지운다. */
+    private var pendingId: Long? = null
+
+    /** 자동 처리로 이미 분석된 건을 대기함에서 연다. 다시 분석하지 않는다. */
+    fun openPending(id: Long) {
+        viewModelScope.launch {
+            val p = repo.db.pending().byId(id)
+            if (p == null) { _state.value = ConfirmState.Failed("", "call", null, "대기함에서 해당 건을 찾을 수 없습니다. 이미 처리되었을 수 있습니다."); return@launch }
+            val analysis = runCatching { json.decodeFromString(Analysis.serializer(), p.analysisJson) }.getOrNull()
+            if (analysis == null) { start(p.rawText, p.source, p.callerHint); return@launch }
+            pendingId = id
+            val settings = repo.settings.current()
+            _state.value = ConfirmState.Ready(ConfirmDraft.from(analysis, p.rawText, p.source, settings.defaultEntity))
+        }
+    }
 
     fun start(text: String, source: String, callerHint: String? = null) {
+        pendingId = null
         _state.value = ConfirmState.Analyzing(text)
         viewModelScope.launch {
             try {
@@ -55,6 +74,8 @@ class ConfirmViewModel(private val repo: Repository) : ViewModel() {
         viewModelScope.launch {
             try {
                 val result = repo.save(s.draft)
+                pendingId?.let { repo.db.pending().delete(it) }
+                pendingId = null
                 _state.value = ConfirmState.Saved(result)
             } catch (e: Exception) {
                 _state.value = s.copy(saving = false, message = "저장 실패: ${e.message}")
@@ -82,7 +103,12 @@ class ConfirmViewModel(private val repo: Repository) : ViewModel() {
 
     fun dismissReply() = _state.update { s -> if (s is ConfirmState.Ready) s.copy(reply = null) else s }
 
-    fun discard() { _state.value = ConfirmState.Discarded }
+    fun discard() {
+        val id = pendingId
+        pendingId = null
+        if (id != null) viewModelScope.launch { repo.db.pending().delete(id) }
+        _state.value = ConfirmState.Discarded
+    }
 
-    fun reset() { _state.value = ConfirmState.Idle }
+    fun reset() { pendingId = null; _state.value = ConfirmState.Idle }
 }

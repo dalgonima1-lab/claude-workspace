@@ -44,6 +44,34 @@ class RelayApi(
             json.decodeFromString(DraftReplyResponse.serializer(), it).reply
         }
 
+    /** 녹음 조각(4MB 이하)을 올려 글자로 받는다. */
+    suspend fun transcribe(bytes: ByteArray, contentType: String, callerHint: String?): String = withContext(Dispatchers.IO) {
+        val token = tokenProvider()
+        if (token.isBlank()) throw RelayException(0, "설정에서 서버 토큰을 먼저 입력하세요")
+        val builder = Request.Builder()
+            .url(url("/api/transcribe"))
+            .header("x-app-token", token)
+            .post(bytes.toRequestBody(contentType.toMediaType()))
+        if (!callerHint.isNullOrBlank()) builder.header("x-caller-hint", java.net.URLEncoder.encode(callerHint, "UTF-8"))
+        try {
+            longClient.newCall(builder.build()).execute().use { res ->
+                val text = res.body?.string().orEmpty()
+                if (!res.isSuccessful) {
+                    val msg = runCatching { json.decodeFromString(ErrorResponse.serializer(), text).error }.getOrDefault("서버 오류 (${res.code})")
+                    throw RelayException(res.code, msg)
+                }
+                runCatching { json.decodeFromString(TranscribeResponse.serializer(), text).text }
+                    .getOrElse { throw RelayException(res.code, "응답 형식이 올바르지 않습니다") }
+            }
+        } catch (e: IOException) {
+            throw RelayException(0, "서버에 연결하지 못했습니다: ${e.message ?: "네트워크 오류"}")
+        }
+    }
+
+    private val longClient: OkHttpClient by lazy {
+        client.newBuilder().readTimeout(180, TimeUnit.SECONDS).writeTimeout(180, TimeUnit.SECONDS).build()
+    }
+
     private suspend fun <T> post(path: String, body: String, parse: (String) -> T): T = withContext(Dispatchers.IO) {
         val token = tokenProvider()
         if (token.isBlank()) throw RelayException(0, "설정에서 서버 토큰을 먼저 입력하세요")

@@ -99,3 +99,27 @@ data class TicketEntity(
     val createdAt: Long,
     val closedAt: Long? = null,
 )
+
+/** 자동 처리로 분석까지 끝났지만 아직 사용자가 확인하지 않은 건 */
+@Entity(tableName = "pending")
+data class PendingEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val createdAt: Long,
+    val source: String,
+    val rawText: String,
+    val analysisJson: String,
+    val callerHint: String? = null,
+    val title: String,
+)
+
+/** 처리한(또는 처리 중인) 통화 녹음 파일. status: processing / done / empty / error / skipped */
+@Entity(tableName = "recordings")
+data class RecordingEntity(
+    @PrimaryKey val mediaId: Long,
+    val displayName: String,
+    val dateAdded: Long,
+    val status: String,
+    val processedAt: Long? = null,
+    val pendingId: Long? = null,
+    val error: String? = null,
+)

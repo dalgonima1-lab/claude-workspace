@@ -110,3 +110,33 @@ interface TicketDao {
     @Update
     suspend fun update(ticket: TicketEntity)
 }
+
+@Dao
+interface PendingDao {
+    @Query("SELECT * FROM pending ORDER BY createdAt DESC")
+    fun all(): Flow<List<PendingEntity>>
+
+    @Query("SELECT COUNT(*) FROM pending")
+    fun count(): Flow<Int>
+
+    @Query("SELECT * FROM pending WHERE id = :id")
+    suspend fun byId(id: Long): PendingEntity?
+
+    @Insert
+    suspend fun insert(p: PendingEntity): Long
+
+    @Query("DELETE FROM pending WHERE id = :id")
+    suspend fun delete(id: Long)
+}
+
+@Dao
+interface RecordingDao {
+    @Query("SELECT * FROM recordings WHERE mediaId = :mediaId")
+    suspend fun byMediaId(mediaId: Long): RecordingEntity?
+
+    @Query("SELECT * FROM recordings ORDER BY dateAdded DESC LIMIT :limit")
+    fun recent(limit: Int): Flow<List<RecordingEntity>>
+
+    @Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
+    suspend fun upsert(r: RecordingEntity)
+}

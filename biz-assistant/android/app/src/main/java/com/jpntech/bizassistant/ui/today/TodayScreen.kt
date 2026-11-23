@@ -62,6 +62,7 @@ fun TodayScreen(
     clipboard: String? = null,
     onUseClipboard: (String) -> Unit = {},
     onDismissClipboard: () -> Unit = {},
+    onOpenPending: (Long) -> Unit = {},
 ) {
     val repo = BizApp.from(LocalContext.current).repository
     val scope = rememberCoroutineScope()
@@ -75,6 +76,7 @@ fun TodayScreen(
     val openTickets by remember { repo.db.tickets().openCount() }.collectAsStateWithLifecycle(0)
     val money by remember { repo.db.money().open() }.collectAsStateWithLifecycle(emptyList())
     val recent by remember { repo.db.records().recent(6) }.collectAsStateWithLifecycle(emptyList())
+    val pending by remember { repo.db.pending().all() }.collectAsStateWithLifecycle(emptyList())
 
     val todayEvents = events.filter { it.startMillis < dayEnd }
     val tomorrowEvents = events.filter { it.startMillis >= dayEnd }
@@ -85,7 +87,10 @@ fun TodayScreen(
     val dueTomorrow = tasks.count { TimeUtil.parseDate(it.due) == today.plusDays(1) }
 
     val sentence = buildString {
-        if (recent.isEmpty() && todayEvents.isEmpty() && tasks.isEmpty()) {
+        if (pending.isNotEmpty()) {
+            append("확인을 기다리는 통화 정리가 {${pending.size}건} 있습니다. ")
+        }
+        if (recent.isEmpty() && todayEvents.isEmpty() && tasks.isEmpty() && pending.isEmpty()) {
             append("아직 정리한 기록이 없습니다. 통화 요약을 {공유}하거나 아래에 적어 주시면 여기서 정리해 드립니다.")
         } else {
             val next = todayEvents.firstOrNull { it.startMillis > now }
@@ -103,6 +108,20 @@ fun TodayScreen(
             item { AssistantBand(kicker = TimeUtil.formatDate(today), voice = voice(sentence), live = true) }
             if (clipboard != null) {
                 item { ClipboardOffer(clipboard, onUse = { onUseClipboard(clipboard) }, onDismiss = onDismissClipboard) }
+            }
+            if (pending.isNotEmpty()) {
+                item {
+                    Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                        SectionTitle("확인 대기")
+                        pending.forEachIndexed { i, p ->
+                            RailItem(last = i == pending.lastIndex, tone = BizColors.Signal, active = true, onClick = { onOpenPending(p.id) }) {
+                                Text(p.callerHint ?: Labels.source(p.source), style = MaterialTheme.typography.labelSmall, color = BizColors.Signal)
+                                Text(p.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = BizColors.Text)
+                                Text(TimeUtil.formatDateTime(p.createdAt) + "  확인하려면 누르세요", style = MaterialTheme.typography.bodySmall, color = BizColors.Muted)
+                            }
+                        }
+                    }
+                }
             }
 
             item {
