@@ -7,6 +7,8 @@ import android.os.Build
 import android.provider.MediaStore
 import androidx.core.content.ContextCompat
 import androidx.work.Constraints
+import androidx.work.Data
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
@@ -20,6 +22,7 @@ object RecordingWatcher {
     private const val WATCH = "recording-watch"
     private const val SWEEP = "recording-sweep"
     private const val NOW = "recording-now"
+    private const val AFTER_CALL = "recording-after-call"
 
     fun hasAudioPermission(context: Context): Boolean {
         val perm = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
@@ -44,6 +47,18 @@ object RecordingWatcher {
     fun rearm(context: Context) {
         WorkManager.getInstance(context).enqueueUniqueWork(WATCH, ExistingWorkPolicy.APPEND_OR_REPLACE, watchRequest())
     }
+
+    /** 통화가 끊긴 직후. 녹음 파일이 저장소에 잡힐 때까지 작업 안에서 잠깐 기다린다. */
+    fun runAfterCall(context: Context) {
+        val req = OneTimeWorkRequestBuilder<RecordingWorker>()
+            .setInputData(Data.Builder().putBoolean(RecordingWorker.KEY_AFTER_CALL, true).build())
+            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(AFTER_CALL, ExistingWorkPolicy.REPLACE, req)
+    }
+
+    fun hasPhonePermission(context: Context): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
 
     fun runNow(context: Context) {
         WorkManager.getInstance(context).enqueueUniqueWork(NOW, ExistingWorkPolicy.REPLACE, OneTimeWorkRequestBuilder<RecordingWorker>().build())

@@ -159,11 +159,14 @@ fun SettingsScreen() {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("통화가 끝나면 녹음을 글자로 바꿔 정리", style = MaterialTheme.typography.bodyMedium, color = BizColors.Text)
-                        Text("전화 앱의 통화 자동 녹음이 켜져 있어야 합니다. 준비되면 알림이 옵니다.", style = MaterialTheme.typography.bodySmall, color = BizColors.Muted)
+                        Text("통화가 끊기면 바로 시작해 보통 1분 안에 알림이 옵니다. 전화 앱의 통화 자동 녹음이 켜져 있어야 합니다.", style = MaterialTheme.typography.bodySmall, color = BizColors.Muted)
+                        if (autoProcess && !RecordingWatcher.hasPhonePermission(app)) {
+                            Text("전화 상태 권한이 없어 통화 종료를 바로 알 수 없습니다. 스위치를 껐다 켜서 허용해 주세요.", style = MaterialTheme.typography.bodySmall, color = BizColors.Amber)
+                        }
                     }
                     Switch(checked = autoProcess, onCheckedChange = { on ->
                         if (on) {
-                            val perms = mutableListOf(RecordingWatcher.audioPermission())
+                            val perms = mutableListOf(RecordingWatcher.audioPermission(), Manifest.permission.READ_PHONE_STATE)
                             if (android.os.Build.VERSION.SDK_INT >= 33) perms += Manifest.permission.POST_NOTIFICATIONS
                             audioPermissionLauncher.launch(perms.toTypedArray())
                         } else {

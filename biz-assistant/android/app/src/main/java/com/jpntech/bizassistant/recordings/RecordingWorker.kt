@@ -9,7 +9,13 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.core.app.NotificationCompat
+import android.content.pm.ServiceInfo
+import android.os.Build
 import androidx.work.CoroutineWorker
+import androidx.work.ForegroundInfo
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import androidx.work.WorkerParameters
 import com.jpntech.bizassistant.BizApp
 import com.jpntech.bizassistant.MainActivity
@@ -23,7 +29,9 @@ import kotlinx.serialization.json.Json
 import java.io.File
 
 const val CHANNEL_PENDING = "pending"
+const val CHANNEL_PROGRESS = "progress"
 const val EXTRA_PENDING_ID = "pendingId"
+private const val PROGRESS_ID = 9_001
 
 data class CallRecording(val mediaId: Long, val name: String, val dateAdded: Long, val size: Long, val mime: String?, val uri: Uri)
 
@@ -35,19 +43,32 @@ data class CallRecording(val mediaId: Long, val name: String, val dateAdded: Lon
  * 4) 분석 결과를 대기함에 저장하고 알림을 띄운다 (설정에 따라 바로 등록)
  */
 class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    companion object { const val KEY_AFTER_CALL = "afterCall" }
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true }
 
     override suspend fun doWork(): Result {
         val app = BizApp.from(applicationContext)
         val settings = app.settings.current()
+        val afterCall = inputData.getBoolean(KEY_AFTER_CALL, false)
         try {
             if (!settings.autoProcess || !RecordingWatcher.hasAudioPermission(applicationContext)) return Result.success()
-            val candidates = findRecordings(settings.autoSince).take(5)
-            for (rec in candidates) {
-                val seen = app.repository.db.recordings().byMediaId(rec.mediaId)
-                if (seen != null && seen.status != "retry") continue
-                if (!isStable(rec)) continue
-                process(rec, settings.autoRegister)
+            if (afterCall) runCatching { setForeground(progressInfo("통화 녹음을 기다리는 중")) }
+            // 통화 직후에는 파일이 저장소에 잡힐 때까지 최대 1분 정도 다시 찾아본다.
+            val attempts = if (afterCall) 14 else 1
+            var processedAny = false
+            for (attempt in 0 until attempts) {
+                if (attempt > 0) delay(4500)
+                val candidates = findRecordings(settings.autoSince).take(5)
+                for (rec in candidates) {
+                    val seen = app.repository.db.recordings().byMediaId(rec.mediaId)
+                    if (seen != null && seen.status != "retry") continue
+                    if (afterCall && System.currentTimeMillis() - rec.dateAdded > 10 * 60 * 1000) continue
+                    if (!isStable(rec)) continue
+                    runCatching { setForeground(progressInfo("통화 내용을 정리하는 중")) }
+                    process(rec, settings.autoRegister)
+                    processedAny = true
+                }
+                if (processedAny) break
             }
             return Result.success()
         } catch (e: Exception) {
@@ -96,7 +117,10 @@ class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val tmp = File(applicationContext.cacheDir, "rec-${rec.mediaId}")
         try {
             val parts = AudioChunker.split(applicationContext, rec.uri, rec.size, tmp)
-            val texts = parts.map { f -> app.repository.api.transcribe(f.readBytes(), rec.mime ?: "audio/mp4", callerHint) }
+            // 조각은 순서만 지키면 되므로 동시에 올린다.
+            val texts = coroutineScope {
+                parts.map { f -> async { app.repository.api.transcribe(f.readBytes(), rec.mime ?: "audio/mp4", callerHint) } }.awaitAll()
+            }
             val transcript = texts.filter { it.isNotBlank() }.joinToString("\n").trim()
             if (transcript.length < 10) {
                 db.recordings().upsert(RecordingEntity(rec.mediaId, rec.name, rec.dateAdded, "empty", System.currentTimeMillis()))
@@ -139,6 +163,23 @@ class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWor
         if (idx > 0) s = s.substring(0, idx)
         s = s.trim()
         return s.takeIf { it.isNotBlank() && !it.all { ch -> ch.isDigit() || ch == '-' || ch == ' ' } }
+    }
+
+    /** 처리하는 동안 보이는 조용한 진행 알림. 시스템이 작업을 끊지 않게 한다. */
+    private fun progressInfo(text: String): ForegroundInfo {
+        val ctx = applicationContext
+        val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (nm.getNotificationChannel(CHANNEL_PROGRESS) == null) {
+            nm.createNotificationChannel(NotificationChannel(CHANNEL_PROGRESS, "통화 정리 진행", NotificationManager.IMPORTANCE_LOW))
+        }
+        val n = NotificationCompat.Builder(ctx, CHANNEL_PROGRESS)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("사업 비서")
+            .setContentText(text)
+            .setOngoing(true)
+            .setProgress(0, 0, true)
+            .build()
+        return if (Build.VERSION.SDK_INT >= 29) ForegroundInfo(PROGRESS_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC) else ForegroundInfo(PROGRESS_ID, n)
     }
 
     private fun notify(id: Int, title: String, text: String, pendingId: Long?) {
