@@ -1,10 +1,11 @@
 package com.jpntech.bizassistant.update
 
+import android.app.DownloadManager
 import android.content.Context
+import android.os.Environment
+import kotlinx.coroutines.delay
 import android.content.Intent
 import android.net.Uri
-import android.provider.Settings
-import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,7 +14,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.io.File
 import java.util.concurrent.TimeUnit
 
 /**
@@ -29,7 +29,7 @@ object UpdateChecker {
         data object Checking : State
         data class Available(val versionName: String, val versionCode: Long, val apkUrl: String, val notes: String) : State
         data class Downloading(val versionName: String, val percent: Int) : State
-        data class ReadyToInstall(val versionName: String, val file: File) : State
+        data class ReadyToInstall(val versionName: String, val fileName: String) : State
         data class Error(val message: String) : State
         data object UpToDate : State
     }
@@ -85,58 +85,52 @@ object UpdateChecker {
         }
     }
 
+    /**
+     * 시스템 다운로드 관리자로 받는다. 받기가 끝나면 알림이 뜨고, 그 알림을 누르면 설치 화면이 열린다.
+     * 앱이 직접 설치를 시작하지 않으므로 별도 설치 권한이 필요 없다.
+     */
     suspend fun download(context: Context) {
         val a = _state.value as? State.Available ?: return
         _state.value = State.Downloading(a.versionName, 0)
         try {
-            val file = withContext(Dispatchers.IO) {
-                val dir = File(context.cacheDir, "updates").apply { mkdirs() }
-                dir.listFiles()?.forEach { it.delete() }
-                val out = File(dir, "biz-assistant-${a.versionName}.apk")
-                val req = Request.Builder().url(a.apkUrl).header("user-agent", "biz-assistant-app").build()
-                client.newCall(req).execute().use { res ->
-                    if (!res.isSuccessful) throw IllegalStateException("다운로드 실패 ${res.code}")
-                    val body = res.body ?: throw IllegalStateException("빈 응답")
-                    val total = body.contentLength()
-                    body.byteStream().use { input ->
-                        out.outputStream().use { output ->
-                            val buf = ByteArray(64 * 1024)
-                            var read: Int
-                            var done = 0L
-                            var lastPct = -1
-                            while (input.read(buf).also { read = it } >= 0) {
-                                output.write(buf, 0, read)
-                                done += read
-                                if (total > 0) {
-                                    val pct = (done * 100 / total).toInt()
-                                    if (pct != lastPct) { lastPct = pct; _state.value = State.Downloading(a.versionName, pct) }
-                                }
-                            }
-                        }
+            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            val fileName = "biz-assistant-${a.versionName}.apk"
+            val req = DownloadManager.Request(Uri.parse(a.apkUrl))
+                .setTitle("사업 비서 ${a.versionName}")
+                .setDescription("받기가 끝나면 이 알림을 눌러 설치하세요")
+                .setMimeType("application/vnd.android.package-archive")
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+            val id = dm.enqueue(req)
+            withContext(Dispatchers.IO) {
+                while (true) {
+                    delay(700)
+                    val q = DownloadManager.Query().setFilterById(id)
+                    val c = dm.query(q) ?: break
+                    val (status, pct, reason) = c.use { cur ->
+                        if (!cur.moveToFirst()) return@use Triple(DownloadManager.STATUS_FAILED, 0, -1)
+                        val st = cur.getInt(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                        val done = cur.getLong(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                        val total = cur.getLong(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                        val rs = cur.getInt(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+                        Triple(st, if (total > 0) (done * 100 / total).toInt() else 0, rs)
+                    }
+                    when (status) {
+                        DownloadManager.STATUS_SUCCESSFUL -> { _state.value = State.ReadyToInstall(a.versionName, fileName); break }
+                        DownloadManager.STATUS_FAILED -> throw IllegalStateException("다운로드 실패 (코드 $reason)")
+                        else -> _state.value = State.Downloading(a.versionName, pct)
                     }
                 }
-                out
             }
-            _state.value = State.ReadyToInstall(a.versionName, file)
         } catch (e: Exception) {
             _state.value = State.Error("다운로드 실패: ${e.message}")
         }
     }
 
-    fun canInstall(context: Context): Boolean = context.packageManager.canRequestPackageInstalls()
-
-    fun openInstallPermission(context: Context) {
-        val i = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    /** 시스템 다운로드 목록을 연다. 거기서 파일을 누르면 설치가 시작된다. */
+    fun openDownloads(context: Context) {
+        val i = Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { context.startActivity(i) }
-    }
-
-    /** 시스템 설치 화면을 연다. 같은 서명키라 기존 앱 위에 업데이트로 설치된다. */
-    fun install(context: Context, file: File) {
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        val i = Intent(Intent.ACTION_VIEW)
-            .setDataAndType(uri, "application/vnd.android.package-archive")
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(i)
     }
 
     fun dismiss() { _state.value = State.Idle }

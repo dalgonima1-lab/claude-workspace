@@ -50,15 +50,12 @@ fun UpdateBanner() {
                 LinearProgressIndicator(progress = { s.percent / 100f }, modifier = Modifier.fillMaxWidth(), color = BizColors.Signal, trackColor = BizColors.Line)
             }
             is UpdateChecker.State.ReadyToInstall -> {
-                val allowed = UpdateChecker.canInstall(context)
                 Text(
-                    voice(if (allowed) "{${s.versionName}} 준비되었습니다. 설치를 누르면 시스템 설치 창이 열립니다." else "설치하려면 이 앱의 {알 수 없는 앱 설치} 허용이 한 번 필요합니다. 허용 후 다시 설치를 누르세요."),
+                    voice("{${s.versionName}} 받기가 끝났습니다. 알림 창의 {다운로드 완료} 알림을 누르거나, 아래에서 다운로드 목록을 열어 파일을 누르면 설치됩니다."),
                     style = MaterialTheme.typography.bodyMedium, color = BizColors.Text,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { if (UpdateChecker.canInstall(context)) UpdateChecker.install(context, s.file) else UpdateChecker.openInstallPermission(context) }, modifier = Modifier.weight(2f)) {
-                        Text(if (allowed) "설치" else "설치 허용하기")
-                    }
+                    Button(onClick = { UpdateChecker.openDownloads(context) }, modifier = Modifier.weight(2f)) { Text("다운로드 목록 열기") }
                     TextButton(onClick = { UpdateChecker.dismiss() }, modifier = Modifier.weight(1f)) { Text("닫기", color = BizColors.Muted) }
                 }
             }
