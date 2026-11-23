@@ -10,6 +10,7 @@ Claude API 키는 이 서버의 환경 변수에만 두고, 폰 앱은 공유 �
 | `/api/health` | GET | 설정 상태 확인 (키·토큰 유무, 사용 모델) |
 | `/api/analyze` | POST | 통화 요약·문자·카톡 텍스트 → 사업 기록 JSON |
 | `/api/draft-reply` | POST | 분석 결과 → 거래처에 보낼 확인 문자 초안 |
+| `/api/transcribe` | POST | 통화 녹음 조각(4MB 이하, 본문에 파일 바이트) → 글자. OpenAI 음성 인식 사용 |
 
 모든 POST 요청에 `x-app-token: <APP_SHARED_TOKEN>` 헤더가 필요하다.
 
@@ -45,7 +46,7 @@ Claude API 키는 이 서버의 환경 변수에만 두고, 폰 앱은 공유 �
 
 ## 환경 변수
 
-`.env.example` 참고. `ANTHROPIC_API_KEY`, `APP_SHARED_TOKEN`은 필수. 토큰은 `openssl rand -hex 32`로 만든다.
+`.env.example` 참고. `ANTHROPIC_API_KEY`, `APP_SHARED_TOKEN`은 필수. `OPENAI_API_KEY`는 통화 녹음 자동 처리에만 필요. 토큰은 `openssl rand -hex 32`로 만든다.
 
 ## 로컬 확인
 
