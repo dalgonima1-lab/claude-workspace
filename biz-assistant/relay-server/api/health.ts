@@ -4,5 +4,5 @@ import { modelId } from "../lib/claude.js";
 
 export default function handler(_req: VercelRequest, res: VercelResponse): void {
   const missing = requireConfig();
-  json(res, missing ? 503 : 200, { ok: !missing, model: modelId(), problem: missing ?? undefined });
+  json(res, missing ? 503 : 200, { ok: !missing, model: modelId(), transcribe: Boolean(process.env.OPENAI_API_KEY), problem: missing ?? undefined });
 }

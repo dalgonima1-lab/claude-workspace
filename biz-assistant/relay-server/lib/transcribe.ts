@@ -35,10 +35,21 @@ export async function transcribe(audio: Buffer, contentType: string, callerHint?
     });
     const body = (await res.json().catch(() => ({}))) as { text?: string; error?: { message?: string } };
     if (!res.ok) throw new Error(body.error?.message ?? `OpenAI ${res.status}`);
-    return { text: (body.text ?? "").trim(), model };
+    const text = (body.text ?? "").trim();
+    // 말소리가 없는 구간에서는 모델이 힌트 문구를 그대로 받아 적는 일이 있다. 그런 결과는 빈 것으로 본다.
+    return { text: looksLikePromptEcho(text, DOMAIN_PROMPT) ? "" : text, model };
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** 결과 단어의 대부분이 힌트 문구의 단어이면 실제 발화가 아니라 힌트를 되풀이한 것이다. */
+export function looksLikePromptEcho(text: string, prompt: string): boolean {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return true;
+  const vocab = new Set(prompt.split(/\s+/).filter(Boolean));
+  const hits = words.filter((w) => vocab.has(w.replace(/[.,!?]/g, ""))).length;
+  return hits / words.length >= 0.7;
 }
 
 function extensionFor(contentType: string): string {
