@@ -14,14 +14,27 @@ android {
         applicationId = "com.jpntech.bizassistant"
         minSdk = 29
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.4.2"
+        versionCode = 8
+        versionName = "0.5.0"
     }
 
+    // CI(GitHub Actions)에서는 복호화한 키 파일 경로를 환경 변수로 넘긴다. 없으면 로컬 디버그 키로 서명한다.
+    val ciKeystore = System.getenv("KEYSTORE_FILE")
+    signingConfigs {
+        if (ciKeystore != null) {
+            create("ci") {
+                storeFile = file(ciKeystore)
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "android"
+                keyAlias = System.getenv("KEY_ALIAS") ?: "androiddebugkey"
+                keyPassword = System.getenv("KEY_PASSWORD") ?: "android"
+            }
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = if (ciKeystore != null) signingConfigs.getByName("ci") else signingConfigs.getByName("debug")
         }
     }
     compileOptions {

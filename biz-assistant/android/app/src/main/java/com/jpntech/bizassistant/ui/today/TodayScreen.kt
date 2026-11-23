@@ -52,6 +52,7 @@ import com.jpntech.bizassistant.ui.common.Stat
 import com.jpntech.bizassistant.ui.common.TypePill
 import com.jpntech.bizassistant.ui.common.voice
 import com.jpntech.bizassistant.ui.theme.BizColors
+import com.jpntech.bizassistant.update.UpdateBanner
 import kotlinx.coroutines.launch
 
 @Composable
@@ -106,6 +107,7 @@ fun TodayScreen(
     Column(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 8.dp)) {
             item { AssistantBand(kicker = TimeUtil.formatDate(today), voice = voice(sentence), live = true) }
+            item { UpdateBanner() }
             if (clipboard != null) {
                 item { ClipboardOffer(clipboard, onUse = { onUseClipboard(clipboard) }, onDismiss = onDismissClipboard) }
             }

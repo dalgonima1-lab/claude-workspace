@@ -40,6 +40,7 @@ import com.jpntech.bizassistant.BizApp
 import com.jpntech.bizassistant.data.settings.AppSettings
 import com.jpntech.bizassistant.data.settings.ENTITIES
 import com.jpntech.bizassistant.recordings.RecordingWatcher
+import com.jpntech.bizassistant.update.UpdateChecker
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jpntech.bizassistant.ui.common.AssistantBand
 import com.jpntech.bizassistant.ui.common.SectionTitle
@@ -207,6 +208,23 @@ fun SettingsScreen() {
                 enabled = loaded != null,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
             ) { Text("저장") }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionTitle("앱 버전")
+                val updateState by UpdateChecker.state.collectAsStateWithLifecycle()
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("현재 ${UpdateChecker.installedVersionName(app)}", style = MaterialTheme.typography.bodyMedium, color = BizColors.Text, modifier = Modifier.weight(1f))
+                    OutlinedButton(onClick = { scope.launch { UpdateChecker.check(app) } }) { Text("업데이트 확인") }
+                }
+                val msg = when (val u = updateState) {
+                    UpdateChecker.State.Checking -> "확인 중"
+                    UpdateChecker.State.UpToDate -> "최신 버전입니다"
+                    is UpdateChecker.State.Available -> "새 버전 ${u.versionName}이 있습니다. 오늘 화면에서 받을 수 있습니다."
+                    is UpdateChecker.State.Error -> u.message
+                    else -> null
+                }
+                if (msg != null) Text(msg, style = MaterialTheme.typography.bodySmall, color = BizColors.Muted)
+            }
 
             Text("통화 내용은 중계 서버를 거쳐 Claude로 전송되어 분석됩니다. 민감한 통화는 공유하지 마세요.", style = MaterialTheme.typography.bodySmall, color = BizColors.Dim)
             Spacer(Modifier.height(24.dp))

@@ -1,6 +1,9 @@
 package com.jpntech.bizassistant
 
 import android.content.ClipboardManager
+import androidx.lifecycle.lifecycleScope
+import com.jpntech.bizassistant.update.UpdateChecker
+import kotlinx.coroutines.launch
 import android.content.Intent
 import androidx.compose.runtime.LaunchedEffect
 import com.jpntech.bizassistant.recordings.EXTRA_PENDING_ID
@@ -124,6 +127,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         readPendingExtra(intent)
+        lifecycleScope.launch { UpdateChecker.checkIfDue(this@MainActivity) }
         setContent {
             val sizeClass = calculateWindowSizeClass(this)
             val expanded = sizeClass.widthSizeClass != WindowWidthSizeClass.Compact
