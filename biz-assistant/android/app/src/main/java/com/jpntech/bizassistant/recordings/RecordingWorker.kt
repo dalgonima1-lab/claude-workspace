@@ -52,6 +52,7 @@ class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val settings = app.settings.current()
         val afterCall = inputData.getBoolean(KEY_AFTER_CALL, false)
         val retryErrors = inputData.getBoolean(KEY_RETRY_ERRORS, false)
+        var needRetry = false
         try {
             if (!settings.autoProcess || !RecordingWatcher.hasAudioPermission(applicationContext)) return Result.success()
             if (afterCall) runCatching { setForeground(progressInfo("통화 녹음을 기다리는 중")) }
@@ -63,16 +64,17 @@ class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 val candidates = findRecordings(settings.autoSince).take(5)
                 for (rec in candidates) {
                     val seen = app.repository.db.recordings().byMediaId(rec.mediaId)
-                    if (seen != null && !(retryErrors && seen.status == "error")) continue
+                    // 연결 실패로 미뤄 둔 건(retry)은 항상 다시, 다른 실패(error)는 "지금 녹음 확인"을 눌렀을 때만 다시 시도한다.
+                    if (seen != null && seen.status != "retry" && !(retryErrors && seen.status == "error")) continue
                     if (afterCall && System.currentTimeMillis() - rec.dateAdded > 10 * 60 * 1000) continue
                     if (!isStable(rec)) continue
                     runCatching { setForeground(progressInfo("통화 내용을 정리하는 중")) }
-                    process(rec, settings.autoRegister)
+                    if (!process(rec, settings.autoRegister)) needRetry = true
                     processedAny = true
                 }
                 if (processedAny) break
             }
-            return Result.success()
+            return if (needRetry) Result.retry() else Result.success()
         } catch (e: Exception) {
             return Result.retry()
         } finally {
@@ -111,7 +113,8 @@ class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWor
         return now == rec.size
     }
 
-    private suspend fun process(rec: CallRecording, autoRegister: Boolean) {
+    /** 처리 성공이면 true. 네트워크 연결 실패면 retry 로 표시하고 false (WorkManager 가 다시 부른다). */
+    private suspend fun process(rec: CallRecording, autoRegister: Boolean): Boolean {
         val app = BizApp.from(applicationContext)
         val db = app.repository.db
         db.recordings().upsert(RecordingEntity(rec.mediaId, rec.name, rec.dateAdded, "processing"))
@@ -127,7 +130,7 @@ class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWor
             }
             if (parts.isEmpty()) {
                 db.recordings().upsert(RecordingEntity(rec.mediaId, rec.name, rec.dateAdded, "empty", System.currentTimeMillis()))
-                return
+                return true
             }
             // 조각은 순서만 지키면 되므로 동시에 올린다.
             val texts = coroutineScope {
@@ -136,7 +139,7 @@ class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWor
             val transcript = texts.filter { it.isNotBlank() }.joinToString("\n").trim()
             if (transcript.length < 10) {
                 db.recordings().upsert(RecordingEntity(rec.mediaId, rec.name, rec.dateAdded, "empty", System.currentTimeMillis()))
-                return
+                return true
             }
             val header = if (callerHint != null) "[통화 전사본] 상대: $callerHint\n" else "[통화 전사본]\n"
             val fullText = header + transcript
@@ -144,7 +147,7 @@ class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWor
             val a = res.analysis
             if (!a.isBusiness) {
                 db.recordings().upsert(RecordingEntity(rec.mediaId, rec.name, rec.dateAdded, "skipped", System.currentTimeMillis()))
-                return
+                return true
             }
             if (autoRegister) {
                 val settings = app.settings.current()
@@ -161,9 +164,20 @@ class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 val who = listOfNotNull(a.counterpart.org, a.counterpart.person).joinToString(" ").ifBlank { callerHint ?: "상대 미상" }
                 notify(rec.mediaId.toInt(), "통화 정리가 준비되었습니다", "$who: ${a.summary}", pendingUid)
             }
+            return true
+        } catch (e: com.jpntech.bizassistant.data.remote.RelayException) {
+            if (e.status == 0) {
+                // 인터넷이 없거나 서버에 닿지 못함: 조용히 미뤄 두고 네트워크가 되면 다시 한다.
+                db.recordings().upsert(RecordingEntity(rec.mediaId, rec.name, rec.dateAdded, "retry", System.currentTimeMillis(), null, "연결 대기 중: ${e.message}"))
+                return false
+            }
+            db.recordings().upsert(RecordingEntity(rec.mediaId, rec.name, rec.dateAdded, "error", System.currentTimeMillis(), null, e.message))
+            notify(rec.mediaId.toInt(), "통화 정리에 실패했습니다", e.message ?: "알 수 없는 오류", null)
+            return true
         } catch (e: Exception) {
             db.recordings().upsert(RecordingEntity(rec.mediaId, rec.name, rec.dateAdded, "error", System.currentTimeMillis(), null, e.message))
             notify(rec.mediaId.toInt(), "통화 정리에 실패했습니다", e.message ?: "알 수 없는 오류", null)
+            return true
         } finally {
             tmp.deleteRecursively()
         }

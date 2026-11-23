@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.MediaStore
 import androidx.core.content.ContextCompat
+import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.OutOfQuotaPolicy
@@ -50,9 +51,12 @@ object RecordingWatcher {
 
     /** 통화가 끊긴 직후. 녹음 파일이 저장소에 잡힐 때까지 작업 안에서 잠깐 기다린다. */
     fun runAfterCall(context: Context) {
+        // 통화 직후에는 데이터가 잠시 끊겨 있는 일이 많다. 네트워크가 될 때까지 기다렸다가 시작하고, 실패하면 30초 간격으로 다시 시도한다.
         val req = OneTimeWorkRequestBuilder<RecordingWorker>()
             .setInputData(Data.Builder().putBoolean(RecordingWorker.KEY_AFTER_CALL, true).build())
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .setBackoffCriteria(BackoffPolicy.LINEAR, 30, TimeUnit.SECONDS)
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(AFTER_CALL, ExistingWorkPolicy.REPLACE, req)
     }
@@ -64,6 +68,8 @@ object RecordingWatcher {
     fun runNow(context: Context) {
         val req = OneTimeWorkRequestBuilder<RecordingWorker>()
             .setInputData(Data.Builder().putBoolean(RecordingWorker.KEY_RETRY_ERRORS, true).build())
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .setBackoffCriteria(BackoffPolicy.LINEAR, 30, TimeUnit.SECONDS)
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(NOW, ExistingWorkPolicy.REPLACE, req)
     }
@@ -74,8 +80,10 @@ object RecordingWatcher {
     }
 
     private fun watchRequest() = OneTimeWorkRequestBuilder<RecordingWorker>()
+        .setBackoffCriteria(BackoffPolicy.LINEAR, 30, TimeUnit.SECONDS)
         .setConstraints(
             Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
                 .addContentUriTrigger(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, true)
                 .setTriggerContentUpdateDelay(12, TimeUnit.SECONDS)
                 .setTriggerContentMaxDelay(90, TimeUnit.SECONDS)
