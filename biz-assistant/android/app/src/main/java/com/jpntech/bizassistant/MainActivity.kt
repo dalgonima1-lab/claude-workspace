@@ -1,6 +1,8 @@
 package com.jpntech.bizassistant
 
+import android.content.ClipboardManager
 import android.os.Bundle
+import androidx.compose.runtime.mutableStateOf
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -53,6 +55,17 @@ private val destinations = listOf(
 )
 
 class MainActivity : ComponentActivity() {
+    /** 창이 앞으로 올 때 읽은 클립보드 글. 통화 요약을 복사해 오면 오늘 화면이 먼저 제안한다. */
+    private val clipboardText = mutableStateOf<String?>(null)
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (!hasFocus) return
+        val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        val text = runCatching { cm.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString() }.getOrNull()
+        clipboardText.value = text?.takeIf { it.trim().length >= 20 }
+    }
+
     private val confirmVm: ConfirmViewModel by viewModels {
         object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -66,13 +79,14 @@ class MainActivity : ComponentActivity() {
         setContent {
             val sizeClass = calculateWindowSizeClass(this)
             val expanded = sizeClass.widthSizeClass != WindowWidthSizeClass.Compact
-            BizTheme { MainScaffold(expanded = expanded, confirmVm = confirmVm) }
+            val clip by clipboardText
+            BizTheme { MainScaffold(expanded = expanded, confirmVm = confirmVm, clipboard = clip, onClipboardHandled = { clipboardText.value = null }) }
         }
     }
 }
 
 @Composable
-private fun MainScaffold(expanded: Boolean, confirmVm: ConfirmViewModel) {
+private fun MainScaffold(expanded: Boolean, confirmVm: ConfirmViewModel, clipboard: String?, onClipboardHandled: () -> Unit) {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val current = backStack?.destination?.route
@@ -87,7 +101,7 @@ private fun MainScaffold(expanded: Boolean, confirmVm: ConfirmViewModel) {
                     }
                 }
             }
-            Column(Modifier.weight(1f)) { AppNavHost(nav, expanded, confirmVm) }
+            Column(Modifier.weight(1f)) { AppNavHost(nav, expanded, confirmVm, clipboard, onClipboardHandled) }
         }
     } else {
         Scaffold(
@@ -101,9 +115,15 @@ private fun MainScaffold(expanded: Boolean, confirmVm: ConfirmViewModel) {
                 }
             },
         ) { padding ->
-            Column(Modifier.fillMaxSize().padding(padding)) { AppNavHost(nav, expanded, confirmVm) }
+            Column(Modifier.fillMaxSize().padding(padding)) { AppNavHost(nav, expanded, confirmVm, clipboard, onClipboardHandled) }
         }
     }
+}
+
+/** 복사해 온 글이 통화 요약인지 문자인지 어림한다. 확인 카드에서 바꿀 수 있다. */
+fun guessSource(text: String): String = when {
+    text.contains("통화") || text.contains("녹음") || text.contains("요약") || text.lines().size >= 6 -> "call"
+    else -> "sms"
 }
 
 private fun navTo(nav: NavHostController, route: String) {
@@ -115,9 +135,22 @@ private fun navTo(nav: NavHostController, route: String) {
 }
 
 @Composable
-private fun AppNavHost(nav: NavHostController, expanded: Boolean, confirmVm: ConfirmViewModel) {
+private fun AppNavHost(nav: NavHostController, expanded: Boolean, confirmVm: ConfirmViewModel, clipboard: String?, onClipboardHandled: () -> Unit) {
     NavHost(navController = nav, startDestination = "today") {
-        composable("today") { TodayScreen(expanded = expanded, onManualInput = { nav.navigate("input") }, onOpenTickets = { navTo(nav, "tickets") }) }
+        composable("today") {
+            TodayScreen(
+                expanded = expanded,
+                onManualInput = { nav.navigate("input") },
+                onOpenTickets = { navTo(nav, "tickets") },
+                clipboard = clipboard,
+                onUseClipboard = { text ->
+                    onClipboardHandled()
+                    confirmVm.start(text, guessSource(text))
+                    nav.navigate("confirm")
+                },
+                onDismissClipboard = onClipboardHandled,
+            )
+        }
         composable("orgs") { OrgsScreen(expanded = expanded) }
         composable("tickets") { TicketsScreen(expanded = expanded) }
         composable("settings") { SettingsScreen() }

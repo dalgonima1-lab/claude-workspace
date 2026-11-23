@@ -19,7 +19,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -53,7 +55,14 @@ import com.jpntech.bizassistant.ui.theme.BizColors
 import kotlinx.coroutines.launch
 
 @Composable
-fun TodayScreen(expanded: Boolean, onManualInput: () -> Unit, onOpenTickets: () -> Unit) {
+fun TodayScreen(
+    expanded: Boolean,
+    onManualInput: () -> Unit,
+    onOpenTickets: () -> Unit,
+    clipboard: String? = null,
+    onUseClipboard: (String) -> Unit = {},
+    onDismissClipboard: () -> Unit = {},
+) {
     val repo = BizApp.from(LocalContext.current).repository
     val scope = rememberCoroutineScope()
     val today = TimeUtil.today()
@@ -92,6 +101,9 @@ fun TodayScreen(expanded: Boolean, onManualInput: () -> Unit, onOpenTickets: () 
     Column(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 8.dp)) {
             item { AssistantBand(kicker = TimeUtil.formatDate(today), voice = voice(sentence), live = true) }
+            if (clipboard != null) {
+                item { ClipboardOffer(clipboard, onUse = { onUseClipboard(clipboard) }, onDismiss = onDismissClipboard) }
+            }
 
             item {
                 Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
@@ -127,6 +139,23 @@ fun TodayScreen(expanded: Boolean, onManualInput: () -> Unit, onOpenTickets: () 
             }
         }
         CommandBar(onClick = onManualInput, modifier = Modifier.padding(horizontal = if (expanded) 24.dp else 16.dp, vertical = 12.dp))
+    }
+}
+
+/** 통화 요약을 복사해 들어오면 비서가 먼저 제안한다. 삼성 요약 창에는 공유 대신 복사 버튼만 있다. */
+@Composable
+private fun ClipboardOffer(text: String, onUse: () -> Unit, onDismiss: () -> Unit) {
+    val preview = text.trim().lines().firstOrNull { it.isNotBlank() }.orEmpty().take(60)
+    Column(
+        Modifier.padding(horizontal = 20.dp, vertical = 6.dp).fillMaxWidth()
+            .background(BizColors.Panel, RoundedCornerShape(14.dp)).padding(16.dp),
+    ) {
+        Text(voice("방금 복사한 글이 있습니다. {${if (text.contains("통화") || text.lines().size >= 6) "통화 요약" else "문자"}}로 보이는데, 지금 정리할까요?"), style = MaterialTheme.typography.bodyMedium, color = BizColors.Text)
+        Text(preview, style = MaterialTheme.typography.bodySmall, color = BizColors.Muted, modifier = Modifier.padding(top = 6.dp))
+        Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onUse, modifier = Modifier.weight(2f)) { Text("정리하기") }
+            TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("아니요", color = BizColors.Muted) }
+        }
     }
 }
 

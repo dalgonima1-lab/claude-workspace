@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -33,7 +36,11 @@ fun ManualInputScreen(onAnalyze: (String, String) -> Unit, onBack: () -> Unit) {
     var source by remember { mutableStateOf("memo") }
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         AssistantBand(kicker = null, voice = voice("무엇을 정리할까요? 통화 요약이나 문자를 {붙여넣거나}, 키보드 마이크로 {말씀}하셔도 됩니다."), modifier = Modifier.padding(horizontal = 0.dp))
-        SourceChips(selected = source, onSelect = { source = it })
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            SourceChips(selected = source, onSelect = { source = it })
+        }
+        val clipboard = LocalClipboardManager.current
+        TextButton(onClick = { clipboard.getText()?.text?.let { if (it.isNotBlank()) text = it } }) { Text("복사한 글 붙여넣기") }
         OutlinedTextField(
             value = text,
             onValueChange = { text = it },
