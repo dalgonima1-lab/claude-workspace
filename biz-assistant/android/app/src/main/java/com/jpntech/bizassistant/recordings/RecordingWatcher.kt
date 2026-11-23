@@ -60,8 +60,12 @@ object RecordingWatcher {
     fun hasPhonePermission(context: Context): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
 
+    /** 설정의 "지금 녹음 확인". 실패했던 녹음도 한 번 더 시도한다. */
     fun runNow(context: Context) {
-        WorkManager.getInstance(context).enqueueUniqueWork(NOW, ExistingWorkPolicy.REPLACE, OneTimeWorkRequestBuilder<RecordingWorker>().build())
+        val req = OneTimeWorkRequestBuilder<RecordingWorker>()
+            .setInputData(Data.Builder().putBoolean(RecordingWorker.KEY_RETRY_ERRORS, true).build())
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(NOW, ExistingWorkPolicy.REPLACE, req)
     }
 
     fun cancel(context: Context) {

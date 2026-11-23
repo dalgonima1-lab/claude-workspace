@@ -44,13 +44,14 @@ data class CallRecording(val mediaId: Long, val name: String, val dateAdded: Lon
  * 4) 분석 결과를 대기함에 저장하고 알림을 띄운다 (설정에 따라 바로 등록)
  */
 class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    companion object { const val KEY_AFTER_CALL = "afterCall" }
+    companion object { const val KEY_AFTER_CALL = "afterCall"; const val KEY_RETRY_ERRORS = "retryErrors" }
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true }
 
     override suspend fun doWork(): Result {
         val app = BizApp.from(applicationContext)
         val settings = app.settings.current()
         val afterCall = inputData.getBoolean(KEY_AFTER_CALL, false)
+        val retryErrors = inputData.getBoolean(KEY_RETRY_ERRORS, false)
         try {
             if (!settings.autoProcess || !RecordingWatcher.hasAudioPermission(applicationContext)) return Result.success()
             if (afterCall) runCatching { setForeground(progressInfo("통화 녹음을 기다리는 중")) }
@@ -62,7 +63,7 @@ class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 val candidates = findRecordings(settings.autoSince).take(5)
                 for (rec in candidates) {
                     val seen = app.repository.db.recordings().byMediaId(rec.mediaId)
-                    if (seen != null && seen.status != "retry") continue
+                    if (seen != null && !(retryErrors && seen.status == "error")) continue
                     if (afterCall && System.currentTimeMillis() - rec.dateAdded > 10 * 60 * 1000) continue
                     if (!isStable(rec)) continue
                     runCatching { setForeground(progressInfo("통화 내용을 정리하는 중")) }
@@ -117,10 +118,20 @@ class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val callerHint = callerFromName(rec.name)
         val tmp = File(applicationContext.cacheDir, "rec-${rec.mediaId}")
         try {
-            val parts = AudioChunker.split(applicationContext, rec.uri, rec.size, tmp)
+            // 녹음 형식이 무엇이든 폰에서 풀어 WAV 조각으로 만든 뒤 올린다 (갤럭시 녹음 코덱 호환 문제 대응).
+            val probe = AudioChunker.probe(applicationContext, rec.uri)
+            val parts = try {
+                AudioChunker.toWavChunks(applicationContext, rec.uri, tmp)
+            } catch (e: Exception) {
+                throw IllegalStateException("녹음을 풀지 못했습니다 (${probe?.mime ?: rec.mime ?: "형식 미상"}, ${probe?.sampleRate ?: 0}Hz): ${e.message}")
+            }
+            if (parts.isEmpty()) {
+                db.recordings().upsert(RecordingEntity(rec.mediaId, rec.name, rec.dateAdded, "empty", System.currentTimeMillis()))
+                return
+            }
             // 조각은 순서만 지키면 되므로 동시에 올린다.
             val texts = coroutineScope {
-                parts.map { f -> async { app.repository.api.transcribe(f.readBytes(), rec.mime ?: "audio/mp4", callerHint) } }.awaitAll()
+                parts.map { f -> async { app.repository.api.transcribe(f.readBytes(), "audio/wav", callerHint) } }.awaitAll()
             }
             val transcript = texts.filter { it.isNotBlank() }.joinToString("\n").trim()
             if (transcript.length < 10) {
