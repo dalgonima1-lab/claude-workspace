@@ -21,6 +21,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.jpntech.bizassistant.ui.common.AssistantBand
+import com.jpntech.bizassistant.ui.common.voice
 import com.jpntech.bizassistant.ui.confirm.SourceChips
 import com.jpntech.bizassistant.ui.theme.BizColors
 
@@ -30,8 +32,7 @@ fun ManualInputScreen(onAnalyze: (String, String) -> Unit, onBack: () -> Unit) {
     var text by rememberSaveable { mutableStateOf("") }
     var source by remember { mutableStateOf("memo") }
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("직접 입력", style = MaterialTheme.typography.titleLarge)
-        Text("통화 요약, 문자, 카톡 내용을 붙여넣거나 메모를 적으세요. 키보드의 마이크로 말해서 넣어도 됩니다.", color = BizColors.Muted, style = MaterialTheme.typography.bodySmall)
+        AssistantBand(kicker = null, voice = voice("무엇을 정리할까요? 통화 요약이나 문자를 {붙여넣거나}, 키보드 마이크로 {말씀}하셔도 됩니다."), modifier = Modifier.padding(horizontal = 0.dp))
         SourceChips(selected = source, onSelect = { source = it })
         OutlinedTextField(
             value = text,

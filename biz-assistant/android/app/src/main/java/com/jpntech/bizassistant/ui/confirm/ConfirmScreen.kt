@@ -6,7 +6,19 @@ import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.LaunchedEffect
+import com.jpntech.bizassistant.ui.common.AssistantBand
+import com.jpntech.bizassistant.ui.common.voice
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,7 +37,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -76,19 +87,54 @@ fun ConfirmScreen(vm: ConfirmViewModel, onFinished: () -> Unit) {
     }
 }
 
+private val ANALYZE_STEPS = listOf("내용 읽기", "누구와의 대화인지 확인", "일정과 약속 찾기", "금액과 할 일 정리", "거래처 기록과 대조")
+
+/** 비서가 전사본을 훑어 내려가는 장면. 서버 응답이 올 때까지 단계 안내가 천천히 진행된다. */
 @Composable
 private fun AnalyzingView(text: String) {
-    Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Spacer(Modifier.height(48.dp))
-        CircularProgressIndicator()
-        Spacer(Modifier.height(16.dp))
-        Text("분석 중입니다", style = MaterialTheme.typography.titleMedium)
-        Text("보통 10초에서 20초 걸립니다", color = BizColors.Muted, style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.height(24.dp))
-        Card {
-            Text("원문", style = MaterialTheme.typography.labelLarge, color = BizColors.Muted)
-            Spacer(Modifier.height(6.dp))
-            Text(text.take(1200), style = MaterialTheme.typography.bodySmall)
+    val lines = remember(text) { text.lines().filter { it.isNotBlank() }.take(16) }
+    val transition = rememberInfiniteTransition(label = "scan")
+    val progress by transition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(4200, easing = LinearEasing), RepeatMode.Restart), label = "scanline",
+    )
+    var step by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (step < ANALYZE_STEPS.lastIndex) { delay(2600); step++ }
+    }
+    val msg = when (step) {
+        0 -> "내용을 읽고 있습니다."
+        1 -> "누구와의 대화인지 확인하고 있습니다."
+        2 -> "날짜와 약속을 찾고 있습니다."
+        3 -> "금액과 할 일을 정리하고 있습니다."
+        else -> "거래처 기록과 맞춰 보고 있습니다. 거의 끝났습니다."
+    }
+    Column(Modifier.fillMaxSize()) {
+        AssistantBand(kicker = "분석 중", voice = voice(msg), live = true)
+        Box(
+            Modifier.padding(horizontal = 20.dp).fillMaxWidth().weight(1f, fill = false)
+                .background(BizColors.Panel, RoundedCornerShape(12.dp)).padding(16.dp),
+        ) {
+            Column {
+                lines.forEachIndexed { i, line ->
+                    val lit = i.toFloat() / lines.size.coerceAtLeast(1) < progress
+                    Text(line, style = MaterialTheme.typography.bodySmall, color = if (lit) BizColors.Text else BizColors.Dim, maxLines = 2)
+                }
+            }
+            Box(
+                Modifier.fillMaxWidth().padding(top = (progress * (lines.size * 18)).dp).height(2.dp)
+                    .background(BizColors.Signal.copy(alpha = 0.9f)),
+            )
+        }
+        Column(Modifier.padding(20.dp)) {
+            ANALYZE_STEPS.forEachIndexed { i, label ->
+                val tone = when { i < step -> BizColors.Green; i == step -> BizColors.Signal; else -> BizColors.Line }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 5.dp)) {
+                    Box(Modifier.size(7.dp).background(tone, CircleShape))
+                    Spacer(Modifier.width(10.dp))
+                    Text(label, style = MaterialTheme.typography.bodyMedium, color = when { i < step -> BizColors.Text; i == step -> BizColors.Signal; else -> BizColors.Muted })
+                }
+            }
         }
     }
 }
@@ -159,13 +205,14 @@ private fun ReadyView(s: ConfirmState.Ready, vm: ConfirmViewModel) {
 
     Column(Modifier.fillMaxSize()) {
         Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("분석 결과 확인", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                Tag("확신도 ${(d.confidence * 100).toInt()}%", if (d.confidence >= 0.7) BizColors.OkSoft else BizColors.WarnSoft, if (d.confidence >= 0.7) BizColors.Ok else BizColors.Warn)
-            }
+            AssistantBand(
+                kicker = listOfNotNull(d.orgName.ifBlank { null }, d.person.ifBlank { null }, Labels.orgKind(d.orgKind)).joinToString(", ") + if (d.confidence < 0.7) "  (확신도 ${(d.confidence * 100).toInt()}%)" else "",
+                voice = voice(readySentence(d)),
+                modifier = Modifier.padding(horizontal = 0.dp),
+            )
 
             Card(onClick = { showRaw = !showRaw }) {
                 Text(if (showRaw) "원문 닫기" else "원문 보기 (${Labels.source(d.source)})", style = MaterialTheme.typography.labelLarge, color = BizColors.Muted)
@@ -273,7 +320,7 @@ private fun ReadyView(s: ConfirmState.Ready, vm: ConfirmViewModel) {
             Spacer(Modifier.height(4.dp))
         }
 
-        Column(Modifier.fillMaxWidth().background(BizColors.Surface).padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { saveWithPermissions() }, enabled = !s.saving, modifier = Modifier.weight(2f).height(50.dp)) {
                     Text(if (s.saving) "저장 중" else "등록")
@@ -287,6 +334,18 @@ private fun ReadyView(s: ConfirmState.Ready, vm: ConfirmViewModel) {
             }
         }
     }
+}
+
+private fun readySentence(d: ConfirmDraft): String {
+    if (d.type == "personal") return "사업과 관계없는 대화로 보입니다. 저장하지 않으려면 아래에서 버리면 됩니다."
+    val parts = mutableListOf<String>()
+    if (d.events.isNotEmpty()) parts += "일정 {${d.events.size}건}"
+    if (d.tasks.isNotEmpty()) parts += "할 일 {${d.tasks.size}건}"
+    if (d.money.isNotEmpty()) parts += "금전 {${d.money.size}건}"
+    val found = if (parts.isEmpty()) "따로 등록할 일정이나 할 일은 찾지 못했습니다." else parts.joinToString(", ") + "을 찾았습니다."
+    val typeLine = "{${Labels.type(d.type)}}" + (if (d.urgency == "high") ", 긴급으로 보입니다." else "으로 정리했습니다.")
+    val q = if (d.questions.isNotEmpty()) " 확인할 점이 {${d.questions.size}가지} 있습니다." else ""
+    return "$typeLine $found$q"
 }
 
 @Composable
@@ -313,11 +372,10 @@ private fun ReplyDialog(reply: String, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun Card(bg: androidx.compose.ui.graphics.Color = BizColors.Surface, onClick: (() -> Unit)? = null, content: @Composable () -> Unit) {
+private fun Card(bg: androidx.compose.ui.graphics.Color = BizColors.Panel, onClick: (() -> Unit)? = null, content: @Composable () -> Unit) {
     val base = Modifier
         .fillMaxWidth()
         .background(bg, RoundedCornerShape(14.dp))
-        .border(1.dp, BizColors.Border, RoundedCornerShape(14.dp))
     val m = if (onClick != null) base.clickable(onClick = onClick) else base
     Column(m.padding(14.dp)) { content() }
 }

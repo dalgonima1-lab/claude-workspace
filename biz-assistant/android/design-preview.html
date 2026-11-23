@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>사업 비서 새 디자인 미리보기</title>
+<style>
+@font-face{font-family:P;src:url(Pretendard-Light.ttf);font-weight:300}
+@font-face{font-family:P;src:url(Pretendard-Regular.ttf);font-weight:400}
+@font-face{font-family:P;src:url(Pretendard-Medium.ttf);font-weight:500}
+@font-face{font-family:P;src:url(Pretendard-SemiBold.ttf);font-weight:600}
+:root{--g:#0B1A2E;--p:#112640;--l:#1E3A5C;--t:#E8EFF7;--m:#8DA2BA;--s:#5CD6E6;--a:#F2B544;--r:#FF6B6B;--k:#4CD38A}
+*{box-sizing:border-box}body{margin:0;background:#061020;font-family:P,system-ui,sans-serif;color:var(--t);display:flex;gap:40px;padding:40px;font-feature-settings:"tnum"}
+.ph{width:400px;height:900px;background:var(--g);border-radius:28px;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:0 0 0 1px #1a2d47}
+.band{padding:26px 22px 18px;display:flex;gap:14px;align-items:flex-start}
+.ring{width:34px;height:34px;border-radius:50%;border:1.5px solid var(--s);position:relative;flex:none;margin-top:2px;box-shadow:0 0 18px rgba(92,214,230,.35) inset,0 0 10px rgba(92,214,230,.25)}
+.ring:after{content:"";position:absolute;inset:9px;border-radius:50%;background:var(--s);opacity:.9}
+.voice{font-size:17px;line-height:1.5;font-weight:400}
+.voice b{font-weight:500;color:var(--s)}
+.date{color:var(--m);font-size:12px;margin-bottom:6px}
+.sec{padding:14px 22px 0}
+.h{font-size:12px;color:var(--m);font-weight:500;margin-bottom:10px}
+.rail{position:relative;padding-left:26px}
+.rail:before{content:"";position:absolute;left:7px;top:6px;bottom:6px;width:1px;background:var(--l)}
+.it{position:relative;padding:9px 0 11px;border-bottom:1px solid #15304d}
+.it:last-child{border-bottom:0}
+.it:before{content:"";position:absolute;left:-23px;top:14px;width:9px;height:9px;border-radius:50%;background:var(--g);border:1.5px solid var(--m)}
+.it.now:before{background:var(--s);border-color:var(--s);box-shadow:0 0 10px rgba(92,214,230,.6)}
+.it.red:before{border-color:var(--r)}
+.row{display:flex;gap:12px;align-items:baseline}
+.tm{font-weight:300;font-size:22px;letter-spacing:-.5px;width:62px;flex:none}
+.ti{font-size:15px;font-weight:500}
+.sub{font-size:12.5px;color:var(--m);margin-top:2px}
+.pill{display:inline-block;font-size:11.5px;font-weight:500;padding:2px 8px;border-radius:5px;margin-right:6px}
+.pill.r{background:rgba(255,107,107,.14);color:var(--r)}.pill.a{background:rgba(242,181,68,.14);color:var(--a)}.pill.k{background:rgba(76,211,138,.14);color:var(--k)}.pill.n{background:rgba(141,162,186,.14);color:var(--m)}
+.stats{display:flex;gap:0;padding:4px 22px 0}
+.st{flex:1;padding:14px 0;border-top:1px solid var(--l)}
+.st .n{font-size:34px;font-weight:300;letter-spacing:-1px;line-height:1}
+.st .n.red{color:var(--r)}.st .n.k{color:var(--k)}
+.st .l{font-size:12px;color:var(--m);margin-top:6px}
+.cmd{margin-top:auto;padding:14px 18px 22px}
+.cmdbox{display:flex;align-items:center;gap:12px;height:54px;border-radius:14px;background:var(--p);border:1px solid var(--l);padding:0 16px;color:var(--m);font-size:15px}
+.cmdbox .mic{margin-left:auto;width:30px;height:30px;border-radius:50%;background:var(--s);display:flex;align-items:center;justify-content:center;color:#062030;font-weight:600;font-size:13px}
+.chk{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #15304d;align-items:flex-start}
+.chk:last-child{border-bottom:0}
+.box{width:20px;height:20px;border-radius:5px;border:1.5px solid var(--s);flex:none;margin-top:2px;background:rgba(92,214,230,.15);position:relative}
+.box:after{content:"";position:absolute;left:6px;top:2px;width:5px;height:10px;border-right:2px solid var(--s);border-bottom:2px solid var(--s);transform:rotate(45deg)}
+.kick{font-size:11.5px;color:var(--m);font-weight:500}
+.kick.s{color:var(--s)}.kick.r{color:var(--r)}.kick.k{color:var(--k)}
+.scan{position:relative;margin:0 22px;padding:14px 16px;border-radius:12px;background:var(--p);height:300px;overflow:hidden;font-size:12.5px;line-height:1.7;color:#6F86A3}
+.scan .ln.on{color:var(--t)}
+.scan .bar{position:absolute;left:0;right:0;top:118px;height:2px;background:var(--s);box-shadow:0 0 22px 6px rgba(92,214,230,.35)}
+.steps{padding:18px 22px 0}
+.step{display:flex;gap:10px;align-items:center;font-size:14px;color:var(--m);padding:6px 0}
+.step .d{width:7px;height:7px;border-radius:50%;background:var(--l)}
+.step.done{color:var(--t)}.step.done .d{background:var(--k)}
+.step.now{color:var(--s)}.step.now .d{background:var(--s);box-shadow:0 0 8px var(--s)}
+.btns{display:flex;gap:8px;padding:14px 18px 22px;margin-top:auto}
+.b{flex:1;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:500;font-size:15px}
+.b.p{background:var(--s);color:#062030;flex:2}
+.b.o{border:1px solid var(--l);color:var(--t)}
+.fld{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #15304d;font-size:14px}
+.fld span:first-child{color:var(--m)}
+.fld span:last-child{font-weight:500;text-align:right}
+.q{margin:12px 22px 0;padding:12px 14px;border-left:2px solid var(--a);font-size:13px;color:#E6CB8E;line-height:1.5;background:rgba(242,181,68,.06)}
+</style></head><body>
+
+<!-- 1. 오늘 (커버) -->
+<div class="ph">
+  <div class="band"><div class="ring"></div>
+    <div><div class="date">11월 23일 월요일</div>
+    <div class="voice">오늘 일정 <b>3건</b>이 있고, 내일 <b>개화산역 납품</b>이 잡혀 있습니다. 군자역 장애 1건은 아직 방문 전입니다.</div></div></div>
+  <div class="sec"><div class="h">오늘</div>
+    <div class="rail">
+      <div class="it now"><div class="row"><div class="tm">10:00</div><div><div class="ti">본사 전기처 설비팀 회의</div><div class="sub">조명제어 추가분 견적 협의, 최 차장</div></div></div></div>
+      <div class="it"><div class="row"><div class="tm">15:00</div><div><div class="ti">알트에이 이 팀장 통화</div><div class="sub">내일 군자역 방문 준비물 확인</div></div></div></div>
+      <div class="it"><div class="row"><div class="tm">23:00</div><div><div class="ti">용답역 야간 작업</div><div class="sub">출입 허가서 지참, 서일이앤씨</div></div></div></div>
+    </div></div>
+  <div class="sec"><div class="h">기한이 가까운 할 일</div>
+    <div class="rail">
+      <div class="it red"><div class="ti">세금계산서 발행, 군자전기사업소</div><div class="sub"><span class="pill r">내일까지</span>11월 기성 3,500,000원</div></div>
+      <div class="it"><div class="ti">시험성적서와 준공도서 제출</div><div class="sub"><span class="pill a">7일 남음</span>군자역 조명제어 교체</div></div>
+    </div></div>
+  <div class="stats">
+    <div class="st"><div class="n red">2</div><div class="l">미완료 장애</div></div>
+    <div class="st"><div class="n k">350<span style="font-size:16px">만</span></div><div class="l">이번 주 받을 돈</div></div>
+    <div class="st"><div class="n">9</div><div class="l">거래처</div></div>
+  </div>
+  <div class="cmd"><div class="cmdbox">무엇을 정리할까요?<div class="mic">●</div></div></div>
+</div>
+
+<!-- 2. 분석 중 -->
+<div class="ph">
+  <div class="band"><div class="ring"></div>
+    <div><div class="date">통화 전사본, 11:30, 3분 12초</div>
+    <div class="voice">통화 내용을 읽고 있습니다. 거래처와 일정을 찾는 중입니다.</div></div></div>
+  <div class="scan">
+    <div class="ln on">검수는 끝났죠.</div><div class="ln on">저번 주에 받아 가지고 보냈잖아요.</div><div class="ln on">원래 JP로 보냈다가 취소됐던데?</div><div class="ln on">그건 땅권이고.</div><div class="ln on">네 개 전기실.</div><div class="ln on">우리 잔금 남았잖아요.</div>
+    <div class="bar"></div>
+    <div class="ln">두 개 전기실 그거는 어?</div><div class="ln">58 58 전기실 어 2개.</div><div class="ln">내일 납품할 거고 그다음에 내일 아마 바로 물품 납품 검사하지 않을까요?</div><div class="ln">어 오팔 정기실?</div><div class="ln">개화산이랑 어린이대공원.</div><div class="ln">그거는 내일 납품할 거예요.</div>
+  </div>
+  <div class="steps">
+    <div class="step done"><div class="d"></div>전사본 읽기</div>
+    <div class="step done"><div class="d"></div>누구와의 통화인지 확인, 내부(회장님)</div>
+    <div class="step now"><div class="d"></div>일정과 약속 찾기</div>
+    <div class="step"><div class="d"></div>금액과 잔금 확인</div>
+    <div class="step"><div class="d"></div>거래처 기록과 대조</div>
+  </div>
+</div>
+
+<!-- 3. 확인 -->
+<div class="ph">
+  <div class="band"><div class="ring"></div>
+    <div><div class="date">회장님과의 통화, 내부</div>
+    <div class="voice">납품 일정 <b>1건</b>과 할 일 <b>3건</b>을 찾았습니다. 잔금 금액은 통화에 없어 비워 두었고, 확인할 점이 <b>7가지</b> 있습니다.</div></div></div>
+  <div class="sec">
+    <div class="fld"><span>소속</span><span>제이피앤텍</span></div>
+    <div class="fld"><span>유형</span><span>납품 설치 <span class="pill r" style="margin:0 0 0 6px">긴급</span></span></div>
+    <div class="fld"><span>현장</span><span>개화산역, 어린이대공원역</span></div>
+  </div>
+  <div class="q">JP로 보냈다가 취소된 송금은 어떤 돈이고 취소 이유는 무엇인지? 외 6가지</div>
+  <div class="sec"><div class="h">등록할 항목</div>
+    <div class="chk"><div class="box"></div><div><div class="kick s">삼성 캘린더</div><div class="ti">11/24 (화) 09:00 전기실 2개소 납품</div><div class="sub">개화산역, 어린이대공원역</div></div></div>
+    <div class="chk"><div class="box"></div><div><div class="kick">할 일, 나</div><div class="ti">네 개 전기실 잔금 입금 여부 확인</div></div></div>
+    <div class="chk"><div class="box"></div><div><div class="kick">할 일, 나</div><div class="ti">취소된 송금 경위 확인</div></div></div>
+    <div class="chk"><div class="box"></div><div><div class="kick k">받을 돈</div><div class="ti">네 개 전기실 잔금, 금액 미정</div></div></div>
+  </div>
+  <div class="btns"><div class="b p">등록</div><div class="b o">답장 초안</div></div>
+</div>
+</body></html>

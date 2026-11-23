@@ -3,14 +3,13 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- 수첩 모양: 흰 종이 위에 세 줄 -->
+    <!-- 비서의 고리: 가는 원 위에 작은 점 -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M34,28 h40 a4,4 0 0 1 4,4 v44 a4,4 0 0 1 -4,4 h-40 a4,4 0 0 1 -4,-4 v-44 a4,4 0 0 1 4,-4 z" />
+        android:strokeColor="#5CD6E6"
+        android:strokeWidth="3"
+        android:fillColor="#00000000"
+        android:pathData="M54,54 m-22,0 a22,22 0 1 0 44,0 a22,22 0 1 0 -44,0" />
     <path
-        android:fillColor="#1D4F91"
-        android:pathData="M40,42 h28 v4 h-28 z M40,52 h28 v4 h-28 z M40,62 h18 v4 h-18 z" />
-    <path
-        android:fillColor="#B42318"
-        android:pathData="M66,60 m-6,0 a6,6 0 1 0 12,0 a6,6 0 1 0 -12,0" />
+        android:fillColor="#5CD6E6"
+        android:pathData="M54,54 m-9,0 a9,9 0 1 0 18,0 a9,9 0 1 0 -18,0" />
 </vector>
