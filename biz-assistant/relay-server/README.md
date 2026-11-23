@@ -27,13 +27,13 @@ Claude API 키는 이 서버의 환경 변수에만 두고, 폰 앱은 공유 �
 }
 ```
 
-`source`: `call | sms | kakao | mail | visit | memo`. `known_*`는 폰에 저장된 거래처·사업 이름 목록으로, 이름 매칭 정확도를 높인다.
+`source`: `call | sms | kakao | mail | visit | memo`. 통화 입력은 갤럭시 AI 요약문과 화자 표시 없는 전사본 둘 다 받는다. `known_*`는 폰에 저장된 거래처·사업 이름 목록으로, 이름 매칭 정확도를 높인다.
 
 ### `/api/analyze` 응답
 
 ```json
 {
-  "analysis": { "is_business": true, "entity": "제이피앤텍", "counterpart": {...}, "project": "...", "type": "fault", "urgency": "high", "summary": "...", "decisions": [], "events": [], "tasks": [], "money": [], "reply_draft": "...", "sensitive": false, "confidence": 0.9 },
+  "analysis": { "is_business": true, "entity": "제이피앤텍", "counterpart": {...}, "project": "...", "type": "fault", "urgency": "high", "summary": "...", "decisions": [], "events": [], "tasks": [], "money": [], "questions": ["확인할 점"], "reply_draft": "...", "sensitive": false, "confidence": 0.9 },
   "model": "claude-opus-5-5",
   "usage": { "input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0 }
 }

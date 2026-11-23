@@ -3,8 +3,8 @@ import { z } from "zod";
 /** 내 소속. 공유 수신 시 기본값을 고르거나 AI가 추정한다. */
 export const EntitySchema = z.enum(["제이피앤텍", "서일이앤씨", "불명"]);
 
-/** 상대 조직 종류: 발주처 / 협력업체 / 자재·외주 / 기타 */
-export const OrgKindSchema = z.enum(["client", "partner", "vendor", "other"]);
+/** 상대 조직 종류: 발주처 / 협력업체 / 자재·외주 / 내부(회장님·직원 등 같은 회사) / 기타 */
+export const OrgKindSchema = z.enum(["client", "partner", "vendor", "internal", "other"]);
 
 /** 사건 유형. notes/사업비서-앱-설계.md 2-2절과 같다. */
 export const RecordTypeSchema = z.enum([
@@ -45,13 +45,13 @@ export const TaskSchema = z.object({
 
 export const MoneySchema = z.object({
   kind: MoneyKindSchema.describe("receivable=받을 돈, payable=줄 돈, quote=견적 금액, contract=계약 금액"),
-  amount: z.number().int().describe("원 단위 정수"),
+  amount: z.number().int().nullable().describe("원 단위 정수. 금액이 언급되지 않았으면 null"),
   due: z.string().nullable().describe("지급·청구 기한 'YYYY-MM-DD'"),
   note: z.string().nullable(),
 });
 
 export const CounterpartSchema = z.object({
-  org: z.string().nullable().describe("상대 조직. 서울교통공사는 사업소·역·부서까지 (예: 서울교통공사 군자전기사업소)"),
+  org: z.string().nullable().describe("상대 조직. 서울교통공사는 사업소·역·부서까지 (예: 서울교통공사 군자전기사업소). 내부 통화면 사용자 소속명"),
   org_kind: OrgKindSchema,
   person: z.string().nullable().describe("담당자. 성과 직함 (예: 김 과장)"),
   phone: z.string().nullable(),
@@ -72,6 +72,7 @@ export const AnalysisSchema = z.object({
   tasks: z.array(TaskSchema),
   money: z.array(MoneySchema),
   reply_draft: z.string().nullable().describe("상대에게 보낼 확인 문자 초안. 존댓말, 3문장 이내. 사업 무관이면 null"),
+  questions: z.array(z.string()).describe("사용자가 따로 확인해야 할 불명확한 점을 질문 형태로. 없으면 빈 배열"),
   sensitive: z.boolean().describe("개인정보·분쟁·건강 등 민감한 내용이 섞여 있으면 true"),
   confidence: z.number().min(0).max(1).describe("분류와 추출 전체에 대한 확신도"),
 });

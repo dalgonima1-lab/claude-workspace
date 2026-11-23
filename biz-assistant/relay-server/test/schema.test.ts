@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AnalysisSchema, AnalyzeRequestSchema } from "../lib/schema.js";
+import { AnalysisSchema, AnalyzeRequestSchema, CounterpartSchema } from "../lib/schema.js";
 import { buildUserMessage } from "../lib/prompt.js";
 import { SAMPLE_CALL } from "./fixtures.js";
 
@@ -49,7 +49,8 @@ test("분석 스키마: 모델이 돌려줄 형태의 예시가 통과한다", (
       { title: "교체용 제어기 1대 준비", owner: "partner", due: "2026-11-24", note: "알트에이 이 팀장" },
       { title: "조치 결과 보고서 제출", owner: "me", due: null, note: null },
     ],
-    money: [],
+    money: [{ kind: "receivable", amount: null, due: null, note: "4개 전기실 잔금" }],
+    questions: ["JP로 보낸 송금이 취소된 이유는?"],
     reply_draft: "김 과장님, 내일 오전 10시에 군자역 B2 방문하여 점검하겠습니다.",
     sensitive: false,
     confidence: 0.9,
@@ -57,6 +58,12 @@ test("분석 스키마: 모델이 돌려줄 형태의 예시가 통과한다", (
   const parsed = AnalysisSchema.parse(sample);
   assert.equal(parsed.type, "fault");
   assert.equal(parsed.tasks[0].owner, "partner");
+  assert.equal(parsed.money[0].amount, null);
+  assert.equal(parsed.questions.length, 1);
+});
+
+test("분석 스키마: 내부 통화 상대 종류 internal 허용", () => {
+  assert.doesNotThrow(() => CounterpartSchema.parse({ org: "제이피앤텍", org_kind: "internal", person: "회장님", phone: null }));
 });
 
 test("분석 스키마: 잘못된 유형과 범위 밖 확신도는 거부", () => {

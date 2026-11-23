@@ -6,10 +6,10 @@
 import { readFileSync } from "node:fs";
 import { AnalyzeRequestSchema } from "../lib/schema.js";
 import { analyze, draftReply } from "../lib/claude.js";
-import { SAMPLE_CALL } from "../test/fixtures.js";
+import { SAMPLE_CALL, SAMPLE_TRANSCRIPT } from "../test/fixtures.js";
 
 const file = process.argv[2];
-const text = file ? readFileSync(file, "utf8") : SAMPLE_CALL;
+const text = file === "transcript" ? SAMPLE_TRANSCRIPT : file ? readFileSync(file, "utf8") : SAMPLE_CALL;
 
 const req = AnalyzeRequestSchema.parse({
   text,
