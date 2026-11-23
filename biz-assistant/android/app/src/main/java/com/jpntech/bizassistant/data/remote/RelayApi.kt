@@ -44,6 +44,11 @@ class RelayApi(
             json.decodeFromString(DraftReplyResponse.serializer(), it).reply
         }
 
+    suspend fun refine(request: RefineRequest): RefineResult =
+        post("/api/refine", json.encodeToString(RefineRequest.serializer(), request)) {
+            json.decodeFromString(RefineResult.serializer(), it)
+        }
+
     suspend fun pullData(since: Long): PullResponse = withContext(Dispatchers.IO) {
         val token = tokenProvider()
         if (token.isBlank()) throw RelayException(0, "설정에서 서버 토큰을 먼저 입력하세요")

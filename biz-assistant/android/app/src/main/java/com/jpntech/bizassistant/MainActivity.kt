@@ -46,6 +46,7 @@ import com.jpntech.bizassistant.ui.confirm.ConfirmScreen
 import com.jpntech.bizassistant.ui.confirm.ConfirmViewModel
 import com.jpntech.bizassistant.ui.input.ManualInputScreen
 import com.jpntech.bizassistant.ui.orgs.OrgsScreen
+import com.jpntech.bizassistant.ui.record.RecordDetailScreen
 import com.jpntech.bizassistant.ui.settings.SettingsScreen
 import com.jpntech.bizassistant.ui.theme.BizTheme
 import com.jpntech.bizassistant.ui.tickets.TicketsScreen
@@ -216,9 +217,14 @@ private fun AppNavHost(nav: NavHostController, expanded: Boolean, confirmVm: Con
                 },
                 onDismissClipboard = onClipboardHandled,
                 onOpenPending = { id -> confirmVm.openPending(id); nav.navigate("confirm") },
+                onOpenRecord = { uid -> nav.navigate("record/$uid") },
             )
         }
-        composable("orgs") { OrgsScreen(expanded = expanded) }
+        composable("record/{uid}") { entry ->
+            val uid = entry.arguments?.getString("uid") ?: return@composable
+            RecordDetailScreen(recordUid = uid, onBack = { nav.popBackStack() })
+        }
+        composable("orgs") { OrgsScreen(expanded = expanded, onOpenRecord = { uid -> nav.navigate("record/$uid") }) }
         composable("tickets") { TicketsScreen(expanded = expanded) }
         composable("settings") { SettingsScreen() }
         composable("input") {

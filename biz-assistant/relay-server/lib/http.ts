@@ -63,7 +63,7 @@ export function sendError(res: VercelResponse, err: unknown): void {
   }
   if (err instanceof Anthropic.APIError) {
     console.error("claude api error", err.status, err.message);
-    return json(res, 502, { error: `Claude API 오류 (${err.status})` });
+    return json(res, 502, { error: `Claude API 오류 (${err.status})`, detail: err.message });
   }
   console.error("unexpected error:", err instanceof Error ? err.message : String(err));
   return json(res, 500, { error: "서버 오류" });

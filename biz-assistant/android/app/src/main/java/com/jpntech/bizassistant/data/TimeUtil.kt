@@ -34,6 +34,9 @@ object TimeUtil {
     fun parseDate(text: String?): LocalDate? =
         try { if (text.isNullOrBlank()) null else LocalDate.parse(text.take(10), date) } catch (_: DateTimeParseException) { null }
 
+    /** epoch millis → 'YYYY-MM-DDTHH:mm' (한국 시간). 서버에 기존 일정을 설명할 때 */
+    fun formatIsoLocal(millis: Long): String = Instant.ofEpochMilli(millis).atZone(zone).format(dateTime)
+
     fun nowIso(): String = ZonedDateTime.now(zone).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
     fun today(): LocalDate = LocalDate.now(zone)

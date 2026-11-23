@@ -70,6 +70,9 @@ interface RecordDao {
     @Query("SELECT * FROM records WHERE uid = :uid")
     suspend fun byUid(uid: String): RecordEntity?
 
+    @Query("SELECT * FROM records WHERE uid = :uid")
+    fun observe(uid: String): Flow<RecordEntity?>
+
     @Query("SELECT * FROM records WHERE dirty = 1")
     suspend fun dirty(): List<RecordEntity>
 
@@ -84,6 +87,9 @@ interface RecordDao {
 interface EventDao {
     @Query("SELECT e.* FROM events e JOIN records r ON r.uid = e.recordUid WHERE r.orgUid = :orgUid AND e.deleted = 0 ORDER BY e.startMillis DESC")
     fun forOrg(orgUid: String): Flow<List<EventEntity>>
+
+    @Query("SELECT * FROM events WHERE recordUid = :recordUid AND deleted = 0 ORDER BY startMillis")
+    fun forRecord(recordUid: String): Flow<List<EventEntity>>
 
     @Query("SELECT * FROM events WHERE startMillis >= :from AND startMillis < :to AND deleted = 0 ORDER BY startMillis")
     fun between(from: Long, to: Long): Flow<List<EventEntity>>
@@ -112,6 +118,9 @@ interface TaskDao {
     @Query("SELECT t.* FROM tasks t JOIN records r ON r.uid = t.recordUid WHERE r.orgUid = :orgUid AND t.deleted = 0 ORDER BY t.done, t.due")
     fun forOrg(orgUid: String): Flow<List<TaskEntity>>
 
+    @Query("SELECT * FROM tasks WHERE recordUid = :recordUid AND deleted = 0 ORDER BY done, due")
+    fun forRecord(recordUid: String): Flow<List<TaskEntity>>
+
     @Query("SELECT * FROM tasks WHERE uid = :uid")
     suspend fun byUid(uid: String): TaskEntity?
 
@@ -132,6 +141,9 @@ interface TaskDao {
 interface MoneyDao {
     @Query("SELECT m.* FROM money m JOIN records r ON r.uid = m.recordUid WHERE r.orgUid = :orgUid AND m.deleted = 0 ORDER BY m.due")
     fun forOrg(orgUid: String): Flow<List<MoneyEntity>>
+
+    @Query("SELECT * FROM money WHERE recordUid = :recordUid AND deleted = 0 ORDER BY due")
+    fun forRecord(recordUid: String): Flow<List<MoneyEntity>>
 
     @Query("SELECT * FROM money WHERE settled = 0 AND deleted = 0 ORDER BY CASE WHEN due IS NULL THEN 1 ELSE 0 END, due")
     fun open(): Flow<List<MoneyEntity>>
@@ -159,6 +171,9 @@ interface TicketDao {
 
     @Query("SELECT COUNT(*) FROM tickets WHERE status != 'done' AND deleted = 0")
     fun openCount(): Flow<Int>
+
+    @Query("SELECT * FROM tickets WHERE recordUid = :recordUid AND deleted = 0")
+    fun forRecord(recordUid: String): Flow<List<TicketEntity>>
 
     @Query("SELECT * FROM tickets WHERE uid = :uid")
     suspend fun byUid(uid: String): TicketEntity?

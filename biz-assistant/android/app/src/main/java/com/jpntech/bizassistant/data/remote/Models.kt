@@ -106,3 +106,48 @@ data class PushRequest(val items: List<SyncItem>)
 
 @Serializable
 data class PushResponse(val received: Int = 0, val applied: Int = 0, val cursor: Long = 0)
+
+/** /api/refine 요청·응답 */
+@Serializable
+data class RefineRecord(
+    val entity: String, val org: String?, @SerialName("org_kind") val orgKind: String, val person: String?, val project: String?, val site: String?,
+    val system: String, val type: String, val urgency: String, val summary: String, val decisions: List<String>, val questions: List<String>,
+)
+@Serializable data class RefineAnswer(val question: String, val answer: String)
+@Serializable data class RefineEvent(val uid: String, val title: String, val start: String, val end: String? = null, val place: String? = null)
+@Serializable data class RefineTask(val uid: String, val title: String, val owner: String, val due: String? = null, val note: String? = null, val done: Boolean = false)
+@Serializable data class RefineMoney(val uid: String, val kind: String, val amount: Long? = null, val due: String? = null, val note: String? = null)
+@Serializable
+data class RefineRequest(
+    val record: RefineRecord,
+    @SerialName("raw_text") val rawText: String,
+    val answers: List<RefineAnswer>,
+    val events: List<RefineEvent> = emptyList(),
+    val tasks: List<RefineTask> = emptyList(),
+    val money: List<RefineMoney> = emptyList(),
+    @SerialName("received_at") val receivedAt: String,
+)
+@Serializable data class EventUpdate(val uid: String, val title: String? = null, val start: String? = null, val end: String? = null, val place: String? = null)
+@Serializable data class TaskUpdate(val uid: String, val title: String? = null, val due: String? = null, val note: String? = null, val done: Boolean? = null)
+@Serializable data class MoneyUpdate(val uid: String, val amount: Long? = null, val due: String? = null, val note: String? = null)
+@Serializable
+data class RefineResult(
+    @SerialName("note_for_user") val noteForUser: String = "",
+    val summary: String = "",
+    val decisions: List<String> = emptyList(),
+    @SerialName("remaining_questions") val remainingQuestions: List<String> = emptyList(),
+    val org: String? = null,
+    @SerialName("org_kind") val orgKind: String = "other",
+    val person: String? = null,
+    val project: String? = null,
+    val site: String? = null,
+    val system: String = "none",
+    val type: String = "info",
+    val urgency: String = "normal",
+    @SerialName("event_updates") val eventUpdates: List<EventUpdate> = emptyList(),
+    @SerialName("task_updates") val taskUpdates: List<TaskUpdate> = emptyList(),
+    @SerialName("money_updates") val moneyUpdates: List<MoneyUpdate> = emptyList(),
+    @SerialName("new_events") val newEvents: List<EventDto> = emptyList(),
+    @SerialName("new_tasks") val newTasks: List<TaskDto> = emptyList(),
+    @SerialName("new_money") val newMoney: List<MoneyDto> = emptyList(),
+)

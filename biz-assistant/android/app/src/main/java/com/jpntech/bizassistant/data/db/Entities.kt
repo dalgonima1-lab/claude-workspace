@@ -58,6 +58,8 @@ data class RecordEntity(
     val replyDraft: String? = null,
     val sensitive: Boolean = false,
     val confidence: Double = 0.0,
+    /** 확인이 필요한 점에 대한 답. JSON 배열 [{"q":..,"a":..}] */
+    val answersJson: String = "[]",
     val updatedAt: Long,
     val dirty: Boolean = true,
     val deleted: Boolean = false,

@@ -64,6 +64,7 @@ fun TodayScreen(
     onUseClipboard: (String) -> Unit = {},
     onDismissClipboard: () -> Unit = {},
     onOpenPending: (String) -> Unit = {},
+    onOpenRecord: (String) -> Unit = {},
 ) {
     val repo = BizApp.from(LocalContext.current).repository
     val scope = rememberCoroutineScope()
@@ -155,7 +156,7 @@ fun TodayScreen(
                 Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
                     SectionTitle("최근 정리한 기록")
                     if (recent.isEmpty()) EmptyNote("아직 없습니다.")
-                    recent.forEachIndexed { i, r -> RecentRail(r, last = i == recent.lastIndex) }
+                    recent.forEachIndexed { i, r -> RecentRail(r, last = i == recent.lastIndex, onClick = { onOpenRecord(r.uid) }) }
                 }
             }
         }
@@ -243,8 +244,8 @@ private fun dueLabel(dd: String): String = when {
 }
 
 @Composable
-private fun RecentRail(r: RecordEntity, last: Boolean) {
-    RailItem(last = last, tone = if (r.urgency == "high") BizColors.Red else BizColors.Muted) {
+private fun RecentRail(r: RecordEntity, last: Boolean, onClick: () -> Unit) {
+    RailItem(last = last, tone = if (r.urgency == "high") BizColors.Red else BizColors.Muted, onClick = onClick) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             TypePill(r.type)
             EntityPill(r.entity)
@@ -253,5 +254,7 @@ private fun RecentRail(r: RecordEntity, last: Boolean) {
         }
         Text(listOfNotNull(r.orgName, r.person).joinToString(" ").ifBlank { "상대 미상" }, style = MaterialTheme.typography.labelMedium, color = BizColors.Muted, modifier = Modifier.padding(top = 6.dp))
         Text(r.summary, style = MaterialTheme.typography.bodyMedium, color = BizColors.Text)
+        val q = r.questions.lines().count { it.isNotBlank() }
+        if (q > 0) Text("확인할 점 ${q}가지", style = MaterialTheme.typography.labelSmall, color = BizColors.Amber, modifier = Modifier.padding(top = 4.dp))
     }
 }

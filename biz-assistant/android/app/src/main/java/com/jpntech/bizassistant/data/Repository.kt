@@ -19,6 +19,7 @@ import com.jpntech.bizassistant.reminders.ReminderScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 data class SaveResult(val recordUid: String, val calendarWritten: Int, val calendarSkipped: Int, val tasksSaved: Int, val ticketCreated: Boolean)
@@ -115,6 +116,73 @@ class Repository(
         }
         pushSoon()
         return SaveResult(recordUid, written, skipped, tasksSaved, ticket)
+    }
+
+    /** 확인이 필요한 점에 대한 답을 서버에 보내 기록을 보완하고, 결과를 저장한다. 비서의 한 마디를 돌려준다. */
+    suspend fun answerQuestions(recordUid: String, answers: List<Pair<String, String>>): String {
+        val r = db.records().byUid(recordUid) ?: throw IllegalStateException("기록을 찾을 수 없습니다")
+        val events = db.events().forRecord(recordUid).first()
+        val tasks = db.tasks().forRecord(recordUid).first()
+        val money = db.money().forRecord(recordUid).first()
+        val req = com.jpntech.bizassistant.data.remote.RefineRequest(
+            record = com.jpntech.bizassistant.data.remote.RefineRecord(
+                entity = r.entity, org = r.orgName, orgKind = db.orgs().byUid(r.orgUid ?: "")?.kind ?: "other", person = r.person, project = r.projectName, site = r.site,
+                system = r.system, type = r.type, urgency = r.urgency, summary = r.summary,
+                decisions = r.decisions.lines().filter { it.isNotBlank() }, questions = r.questions.lines().filter { it.isNotBlank() },
+            ),
+            rawText = r.rawText,
+            answers = answers.map { com.jpntech.bizassistant.data.remote.RefineAnswer(it.first, it.second) },
+            events = events.map { com.jpntech.bizassistant.data.remote.RefineEvent(it.uid, it.title, TimeUtil.formatIsoLocal(it.startMillis), TimeUtil.formatIsoLocal(it.endMillis), it.place) },
+            tasks = tasks.map { com.jpntech.bizassistant.data.remote.RefineTask(it.uid, it.title, it.owner, it.due, it.note, it.done) },
+            money = money.map { com.jpntech.bizassistant.data.remote.RefineMoney(it.uid, it.kind, it.amount, it.due, it.note) },
+            receivedAt = TimeUtil.nowIso(),
+        )
+        val res = api.refine(req)
+        val now = System.currentTimeMillis()
+        val s = settings.current()
+
+        // 답변 기록
+        val prev = runCatching { kotlinx.serialization.json.Json.parseToJsonElement(r.answersJson) as? kotlinx.serialization.json.JsonArray }.getOrNull() ?: kotlinx.serialization.json.JsonArray(emptyList())
+        val added = answers.map { kotlinx.serialization.json.buildJsonObject { put("q", kotlinx.serialization.json.JsonPrimitive(it.first)); put("a", kotlinx.serialization.json.JsonPrimitive(it.second)) } }
+        val answersJson = kotlinx.serialization.json.JsonArray(prev + added).toString()
+
+        db.records().upsert(
+            r.copy(
+                summary = res.summary.ifBlank { r.summary }, decisions = res.decisions.joinToString("\n"), questions = res.remainingQuestions.joinToString("\n"),
+                orgName = res.org ?: r.orgName, person = res.person ?: r.person, projectName = res.project ?: r.projectName, site = res.site ?: r.site,
+                system = res.system, type = res.type, urgency = res.urgency, answersJson = answersJson, updatedAt = now, dirty = true,
+            ),
+        )
+        for (u in res.eventUpdates) {
+            val e = events.firstOrNull { it.uid == u.uid } ?: continue
+            val start = u.start?.let { TimeUtil.parseToMillis(it) } ?: e.startMillis
+            val end = u.end?.let { TimeUtil.parseToMillis(it) } ?: if (u.start != null) start + (e.endMillis - e.startMillis) else e.endMillis
+            db.events().upsert(e.copy(title = u.title ?: e.title, startMillis = start, endMillis = end, place = u.place ?: e.place, updatedAt = now, dirty = true))
+        }
+        for (u in res.taskUpdates) {
+            val t = tasks.firstOrNull { it.uid == u.uid } ?: continue
+            db.tasks().upsert(t.copy(title = u.title ?: t.title, due = u.due ?: t.due, note = u.note ?: t.note, done = u.done ?: t.done, updatedAt = now, dirty = true))
+        }
+        for (u in res.moneyUpdates) {
+            val m = money.firstOrNull { it.uid == u.uid } ?: continue
+            db.money().upsert(m.copy(amount = u.amount ?: m.amount, due = u.due ?: m.due, note = u.note ?: m.note, updatedAt = now, dirty = true))
+        }
+        val calendarId = calendar.resolveCalendarId(s.calendarId)
+        for (e in res.newEvents) {
+            val start = TimeUtil.parseToMillis(e.start) ?: continue
+            val end = TimeUtil.parseToMillis(e.end) ?: (start + 3600_000)
+            val calId = calendarId?.let { calendar.insertEvent(it, e.title, start, end, e.place, r.summary + "\n(사업 비서에서 등록)") }
+            db.events().upsert(EventEntity(SyncEngine.newUid(), recordUid, e.title, start, end, e.place, calId, now, true, false))
+        }
+        for (t in res.newTasks) {
+            val reminderAt = if (s.remindersEnabled) TimeUtil.reminderFor(t.due) else null
+            val uid = SyncEngine.newUid()
+            db.tasks().upsert(TaskEntity(uid, recordUid, t.title, t.owner, t.due, t.note, false, reminderAt, now, true, false))
+            if (reminderAt != null) reminders.schedule(uid.hashCode().toLong(), t.title, reminderAt)
+        }
+        for (m in res.newMoney) db.money().upsert(MoneyEntity(SyncEngine.newUid(), recordUid, m.kind, m.amount, m.due, m.note, false, now, true, false))
+        pushSoon()
+        return res.noteForUser.ifBlank { "답을 반영했습니다." }
     }
 
     suspend fun advanceTicket(t: TicketEntity) {

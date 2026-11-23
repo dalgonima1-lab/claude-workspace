@@ -51,7 +51,7 @@ private const val STALE_DAYS = 14L
 
 /** 펼친 화면: 왼쪽 거래처 목록, 오른쪽 타임라인. 접은 화면: 목록에서 고르면 타임라인으로 넘어간다. */
 @Composable
-fun OrgsScreen(expanded: Boolean) {
+fun OrgsScreen(expanded: Boolean, onOpenRecord: (String) -> Unit = {}) {
     val repo = BizApp.from(LocalContext.current).repository
     val orgs by remember { repo.db.orgs().all() }.collectAsStateWithLifecycle(emptyList())
     var selectedUid by rememberSaveable { mutableStateOf<String?>(null) }
@@ -64,7 +64,7 @@ fun OrgsScreen(expanded: Boolean) {
             Box(Modifier.width(1.dp).fillMaxHeight().background(BizColors.LineSoft))
             Box(Modifier.fillMaxSize()) {
                 if (selected == null) EmptyNote("왼쪽에서 거래처를 고르면 기록이 여기 나옵니다.", Modifier.padding(20.dp))
-                else OrgTimeline(selected, entityFilter, onFilter = { entityFilter = it })
+                else OrgTimeline(selected, entityFilter, onFilter = { entityFilter = it }, onOpenRecord = onOpenRecord)
             }
         }
     } else {
@@ -74,7 +74,7 @@ fun OrgsScreen(expanded: Boolean) {
             BackHandler { selectedUid = null }
             Column(Modifier.fillMaxSize()) {
                 TextButton(onClick = { selectedUid = null }, modifier = Modifier.padding(start = 8.dp, top = 4.dp)) { Text("거래처 목록으로", color = BizColors.Muted) }
-                OrgTimeline(selected, entityFilter, onFilter = { entityFilter = it })
+                OrgTimeline(selected, entityFilter, onFilter = { entityFilter = it }, onOpenRecord = onOpenRecord)
             }
         }
     }
@@ -124,7 +124,7 @@ private fun OrgRail(o: OrgEntity, selected: Boolean, last: Boolean, onClick: () 
 }
 
 @Composable
-private fun OrgTimeline(org: OrgEntity, entityFilter: String?, onFilter: (String?) -> Unit) {
+private fun OrgTimeline(org: OrgEntity, entityFilter: String?, onFilter: (String?) -> Unit, onOpenRecord: (String) -> Unit) {
     val repo = BizApp.from(LocalContext.current).repository
     val records by remember(org.uid) { repo.db.records().forOrg(org.uid) }.collectAsStateWithLifecycle(emptyList())
     val events by remember(org.uid) { repo.db.events().forOrg(org.uid) }.collectAsStateWithLifecycle(emptyList())
@@ -154,6 +154,7 @@ private fun OrgTimeline(org: OrgEntity, entityFilter: String?, onFilter: (String
                 RecordRail(
                     r = r,
                     last = i == shown.lastIndex,
+                    onOpen = { onOpenRecord(r.uid) },
                     eventLabels = events.filter { it.recordUid == r.uid }.map { TimeUtil.formatDateTime(it.startMillis) + "  " + it.title },
                     taskLabels = tasks.filter { it.recordUid == r.uid }.map { (if (it.done) "완료  " else "") + it.title + (it.due?.let { d -> ", " + TimeUtil.formatDate(d) } ?: "") },
                     moneyLabels = money.filter { it.recordUid == r.uid }.map { Labels.moneyKind(it.kind) + "  " + Labels.won(it.amount) + (it.due?.let { d -> ", " + TimeUtil.formatDate(d) } ?: "") },
@@ -164,9 +165,9 @@ private fun OrgTimeline(org: OrgEntity, entityFilter: String?, onFilter: (String
 }
 
 @Composable
-private fun RecordRail(r: RecordEntity, last: Boolean, eventLabels: List<String>, taskLabels: List<String>, moneyLabels: List<String>) {
-    var open by remember { mutableStateOf(false) }
-    RailItem(last = last, tone = if (r.urgency == "high") BizColors.Red else BizColors.Muted, onClick = { open = !open }) {
+private fun RecordRail(r: RecordEntity, last: Boolean, onOpen: () -> Unit, eventLabels: List<String>, taskLabels: List<String>, moneyLabels: List<String>) {
+    val open = false
+    RailItem(last = last, tone = if (r.urgency == "high") BizColors.Red else BizColors.Muted, onClick = onOpen) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(Labels.source(r.source) + "  " + TimeUtil.formatDateTime(r.createdAt), style = MaterialTheme.typography.labelSmall, color = BizColors.Muted, modifier = Modifier.weight(1f))
             TypePill(r.type)
@@ -184,7 +185,8 @@ private fun RecordRail(r: RecordEntity, last: Boolean, eventLabels: List<String>
                 moneyLabels.forEach { Pill(it, BizColors.Green) }
             }
         }
-        if (r.questions.isNotBlank()) Column(Modifier.padding(top = 6.dp)) { r.questions.lines().forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = BizColors.Amber) } }
+        val q = r.questions.lines().count { it.isNotBlank() }
+        if (q > 0) Text("확인할 점 ${q}가지, 눌러서 답하기", style = MaterialTheme.typography.labelSmall, color = BizColors.Amber, modifier = Modifier.padding(top = 6.dp))
         if (open) {
             Spacer(Modifier.height(8.dp))
             Text("원문", style = MaterialTheme.typography.labelSmall, color = BizColors.Muted)

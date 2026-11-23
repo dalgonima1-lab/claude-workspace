@@ -306,6 +306,53 @@ function Today({ store, go, toast, openPending }) {
 const shortWon = (n) => (n >= 1e8 ? html`${(n / 1e8).toFixed(1)}<small>억</small>` : n >= 1e4 ? html`${Math.floor(n / 1e4)}<small>만</small>` : html`${n}<small>원</small>`);
 const stripMeta = ({ uid, updatedAt, ...data }) => data;
 
+/* ---------- 확인이 필요한 점에 답하기 ---------- */
+const isoLocal = (ms) => { const d = new Date(ms + 9 * 3600000); return d.toISOString().slice(0, 16); };
+
+async function applyAnswers(store, r, events, tasks, money, answers) {
+  const res = await api.refine({
+    record: { entity: r.entity, org: r.orgName || null, org_kind: (store.live("org").find((o) => o.uid === r.orgUid) || {}).kind || "other", person: r.person || null, project: r.projectName || null, site: r.site || null, system: r.system || "none", type: r.type, urgency: r.urgency, summary: r.summary, decisions: r.decisions || [], questions: r.questions || [] },
+    raw_text: r.rawText || "",
+    answers,
+    events: events.map((e) => ({ uid: e.uid, title: e.title, start: isoLocal(e.startMillis), end: isoLocal(e.endMillis), place: e.place || null })),
+    tasks: tasks.map((t) => ({ uid: t.uid, title: t.title, owner: t.owner || "me", due: t.due || null, note: t.note || null, done: !!t.done })),
+    money: money.map((m) => ({ uid: m.uid, kind: m.kind, amount: m.amount ?? null, due: m.due || null, note: m.note || null })),
+    received_at: new Date().toISOString(),
+  });
+  const items = [];
+  items.push({ kind: "record", uid: r.uid, data: { ...stripMeta(r), summary: res.summary || r.summary, decisions: res.decisions, questions: res.remaining_questions, orgName: res.org ?? r.orgName, person: res.person ?? r.person, projectName: res.project ?? r.projectName, site: res.site ?? r.site, system: res.system, type: res.type, urgency: res.urgency, answers: [...(r.answers || []), ...answers.map((a) => ({ q: a.question, a: a.answer }))] } });
+  for (const u of res.event_updates || []) { const e = events.find((x) => x.uid === u.uid); if (!e) continue; const start = u.start ? L.toMillis(u.start) : e.startMillis; const end = u.end ? L.toMillis(u.end) : (u.start ? start + (e.endMillis - e.startMillis) : e.endMillis); items.push({ kind: "event", uid: e.uid, data: { ...stripMeta(e), title: u.title ?? e.title, startMillis: start, endMillis: end, place: u.place ?? e.place } }); }
+  for (const u of res.task_updates || []) { const t = tasks.find((x) => x.uid === u.uid); if (!t) continue; items.push({ kind: "task", uid: t.uid, data: { ...stripMeta(t), title: u.title ?? t.title, due: u.due ?? t.due, note: u.note ?? t.note, done: u.done ?? t.done } }); }
+  for (const u of res.money_updates || []) { const m = money.find((x) => x.uid === u.uid); if (!m) continue; items.push({ kind: "money", uid: m.uid, data: { ...stripMeta(m), amount: u.amount ?? m.amount, due: u.due ?? m.due, note: u.note ?? m.note } }); }
+  for (const e of res.new_events || []) { const start = L.toMillis(e.start); if (!start) continue; items.push({ kind: "event", uid: uid(), data: { recordUid: r.uid, title: e.title, startMillis: start, endMillis: L.toMillis(e.end) || start + 3600000, place: e.place || null, calendarEventId: null } }); }
+  for (const t of res.new_tasks || []) items.push({ kind: "task", uid: uid(), data: { recordUid: r.uid, title: t.title, owner: t.owner || "me", due: t.due || null, note: t.note || null, done: false, reminderAt: null } });
+  for (const m of res.new_money || []) items.push({ kind: "money", uid: uid(), data: { recordUid: r.uid, kind: m.kind, amount: m.amount ?? null, due: m.due || null, note: m.note || null, settled: false } });
+  await store.save(items);
+  return res.note_for_user || "답을 반영했습니다.";
+}
+
+function Questions({ store, r, events, tasks, money, toast }) {
+  const [answers, setAnswers] = useState({});
+  const [working, setWorking] = useState(false);
+  const [note, setNote] = useState(null);
+  const qs = r.questions || [];
+  const filled = Object.entries(answers).filter(([, v]) => v.trim());
+  if (!qs.length && !(r.answers || []).length) return null;
+  const go = async (ev) => {
+    ev.stopPropagation(); setWorking(true);
+    try { setNote(await applyAnswers(store, r, events, tasks, money, filled.map(([q, a]) => ({ question: q, answer: a.trim() })))); setAnswers({}); }
+    catch (e) { toast("반영 실패: " + e.message); } finally { setWorking(false); }
+  };
+  return html`<div onClick=${(e) => e.stopPropagation()} style="margin-top:10px">
+    ${qs.length > 0 && html`<div class="q">
+      <div style="font-weight:500;margin-bottom:6px">확인이 필요한 점  <span style="font-weight:400;color:var(--muted)">답을 적으면 비서가 기록에 반영합니다</span></div>
+      ${qs.map((q) => html`<div style="margin:8px 0"><div>? ${q}</div><input type="text" placeholder="답을 적어 주세요. 모르면 비워 두어도 됩니다" value=${answers[q] || ""} onInput=${(e) => setAnswers({ ...answers, [q]: e.target.value })} style="margin-top:4px" /></div>`)}
+      <div class="actions"><button class="btn primary small" disabled=${!filled.length || working} onClick=${go}>${working ? "반영하는 중" : `답 반영하기 (${filled.length}건)`}</button>${note && html`<span class="sub" style="color:var(--text)">${note}</span>`}</div>
+    </div>`}
+    ${(r.answers || []).length > 0 && html`<div class="sub" style="margin-top:6px">${(r.answers || []).map((a) => html`<div><span style="color:var(--dim)">${a.q}</span>  ${a.a}</div>`)}</div>`}
+  </div>`;
+}
+
 /* ---------- 기록 카드 (보기 + 수정 + 삭제) ---------- */
 function RecordCard({ r, store, toast, compact }) {
   const [open, setOpen] = useState(false);
@@ -339,8 +386,9 @@ function RecordCard({ r, store, toast, compact }) {
         <div class="actions"><button class="btn primary small" onClick=${saveEdit}>저장</button><button class="btn ghost small" onClick=${() => setEdit(false)}>취소</button></div>
       </div>`
       : html`<div style="margin-top:6px">${r.summary}</div>
-        ${!compact && (r.decisions || []).map((x) => html`<div class="sub">• ${x}</div>`)}
-        ${!compact && (r.questions || []).map((x) => html`<div class="sub" style="color:var(--amber)">? ${x}</div>`)}`}
+        ${(open || !compact) && (r.decisions || []).map((x) => html`<div class="sub">• ${x}</div>`)}
+        ${!open && (r.questions || []).length > 0 && html`<div class="sub" style="color:var(--amber)">확인할 점 ${(r.questions || []).length}가지, 눌러서 답하기</div>`}
+        ${open && html`<${Questions} store=${store} r=${r} events=${events} tasks=${tasks} money=${money} toast=${toast} />`}`}
     ${(events.length || tasks.length || money.length) > 0 && html`<div class="meta" style="margin-top:8px;gap:6px">
       ${events.map((e) => html`<${Pill} tone="signal">${L.fmtDateTime(e.startMillis)}  ${e.title}</${Pill}>`)}
       ${tasks.map((t) => html`<${Pill}>${t.done ? "완료  " : ""}${t.title}${t.due ? ", " + L.fmtDate(t.due) : ""}</${Pill}>`)}

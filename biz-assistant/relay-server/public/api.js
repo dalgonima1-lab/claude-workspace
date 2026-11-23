@@ -22,6 +22,7 @@ export const api = {
   push: (items) => call("/api/data", { method: "POST", body: JSON.stringify({ items }) }),
   analyze: (req) => call("/api/analyze", { method: "POST", body: JSON.stringify(req) }),
   draftReply: (analysis) => call("/api/draft-reply", { method: "POST", body: JSON.stringify({ analysis, tone: "formal" }) }),
+  refine: (req) => call("/api/refine", { method: "POST", body: JSON.stringify(req) }),
 };
 
 export const uid = () => (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, "") : Math.random().toString(16).slice(2) + Date.now().toString(16));

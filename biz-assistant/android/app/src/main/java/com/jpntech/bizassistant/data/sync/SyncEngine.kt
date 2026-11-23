@@ -125,7 +125,8 @@ class SyncEngine(
                         orgUid = d.str("orgUid"), orgName = d.str("orgName"), person = d.str("person"), projectUid = d.str("projectUid"), projectName = d.str("projectName"),
                         site = d.str("site"), system = d.str("system") ?: "none", type = d.str("type") ?: "info", urgency = d.str("urgency") ?: "normal", summary = d.str("summary") ?: "",
                         decisions = d.lines("decisions"), questions = d.lines("questions"), rawText = d.str("rawText") ?: "", replyDraft = d.str("replyDraft"),
-                        sensitive = d.bool("sensitive") ?: false, confidence = d.double("confidence") ?: 0.0, updatedAt = it.updatedAt, dirty = false, deleted = it.deleted,
+                        sensitive = d.bool("sensitive") ?: false, confidence = d.double("confidence") ?: 0.0,
+                        answersJson = (d["answers"] as? JsonArray)?.toString() ?: "[]", updatedAt = it.updatedAt, dirty = false, deleted = it.deleted,
                     ),
                 )
             }
@@ -183,6 +184,7 @@ class SyncEngine(
             putNullable("projectUid", r.projectUid); putNullable("projectName", r.projectName); putNullable("site", r.site); put("system", r.system); put("type", r.type); put("urgency", r.urgency)
             put("summary", r.summary); put("decisions", JsonArray(r.decisions.lines().filter { it.isNotBlank() }.map { JsonPrimitive(it) })); put("questions", JsonArray(r.questions.lines().filter { it.isNotBlank() }.map { JsonPrimitive(it) }))
             put("rawText", r.rawText); putNullable("replyDraft", r.replyDraft); put("sensitive", r.sensitive); put("confidence", r.confidence)
+            put("answers", runCatching { kotlinx.serialization.json.Json.parseToJsonElement(r.answersJson) }.getOrElse { JsonArray(emptyList()) })
         }
         fun eventJson(e: EventEntity) = buildJsonObject { put("recordUid", e.recordUid); put("title", e.title); put("startMillis", e.startMillis); put("endMillis", e.endMillis); putNullable("place", e.place); putNullable("calendarEventId", e.calendarEventId) }
         fun taskJson(t: TaskEntity) = buildJsonObject { putNullable("recordUid", t.recordUid); put("title", t.title); put("owner", t.owner); putNullable("due", t.due); putNullable("note", t.note); put("done", t.done); putNullable("reminderAt", t.reminderAt) }
