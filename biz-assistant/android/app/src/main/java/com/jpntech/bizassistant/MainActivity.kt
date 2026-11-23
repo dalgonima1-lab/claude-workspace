@@ -48,6 +48,8 @@ import com.jpntech.bizassistant.ui.theme.BizTheme
 import com.jpntech.bizassistant.ui.tickets.TicketsScreen
 import com.jpntech.bizassistant.ui.today.TodayScreen
 
+private const val MAX_CLIPBOARD_ASKS = 3
+
 private data class Dest(val route: String, val label: String, val icon: ImageVector)
 
 private val destinations = listOf(
@@ -79,7 +81,36 @@ class MainActivity : ComponentActivity() {
         if (!hasFocus) return
         val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
         val text = runCatching { cm.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString() }.getOrNull()
-        clipboardText.value = text?.takeIf { it.trim().length >= 20 }
+            ?.takeIf { it.trim().length >= 20 }
+        clipboardText.value = if (text != null && shouldOfferClipboard(text)) text else null
+    }
+
+    /**
+     * 같은 글을 되풀이해 묻지 않는다.
+     * 이미 정리했거나 "아니요"를 누른 글은 다시 묻지 않고, 그냥 지나친 글도 최대 3번까지만 묻는다.
+     */
+    private fun shouldOfferClipboard(text: String): Boolean {
+        val prefs = getSharedPreferences("clipboard-offer", MODE_PRIVATE)
+        val hash = text.trim().hashCode().toString()
+        val handled = prefs.getStringSet("handled", emptySet()) ?: emptySet()
+        if (hash in handled) return false
+        val lastHash = prefs.getString("lastHash", null)
+        val count = if (lastHash == hash) prefs.getInt("askCount", 0) else 0
+        if (count >= MAX_CLIPBOARD_ASKS) return false
+        if (clipboardText.value == text) return true // 이미 화면에 떠 있는 제안은 횟수를 더하지 않는다
+        prefs.edit().putString("lastHash", hash).putInt("askCount", count + 1).apply()
+        return true
+    }
+
+    /** 정리했거나 거절한 글은 기억해 둔다. 최근 20개만 보관한다. */
+    private fun markClipboardHandled() {
+        val text = clipboardText.value ?: return
+        val prefs = getSharedPreferences("clipboard-offer", MODE_PRIVATE)
+        val handled = LinkedHashSet(prefs.getStringSet("handled", emptySet()) ?: emptySet())
+        handled += text.trim().hashCode().toString()
+        while (handled.size > 20) handled.remove(handled.first())
+        prefs.edit().putStringSet("handled", handled).apply()
+        clipboardText.value = null
     }
 
     private val confirmVm: ConfirmViewModel by viewModels {
@@ -98,7 +129,7 @@ class MainActivity : ComponentActivity() {
             val expanded = sizeClass.widthSizeClass != WindowWidthSizeClass.Compact
             val clip by clipboardText
             val pending by pendingToOpen
-            BizTheme { MainScaffold(expanded = expanded, confirmVm = confirmVm, clipboard = clip, onClipboardHandled = { clipboardText.value = null }, pendingToOpen = pending, onPendingOpened = { pendingToOpen.value = null }) }
+            BizTheme { MainScaffold(expanded = expanded, confirmVm = confirmVm, clipboard = clip, onClipboardHandled = { markClipboardHandled() }, pendingToOpen = pending, onPendingOpened = { pendingToOpen.value = null }) }
         }
     }
 }
