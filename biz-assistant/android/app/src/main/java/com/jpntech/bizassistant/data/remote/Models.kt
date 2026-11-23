@@ -2,6 +2,7 @@ package com.jpntech.bizassistant.data.remote
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 
 /** 중계 서버 응답 JSON. relay-server/lib/schema.ts 와 같은 모양이다. */
 @Serializable
@@ -92,3 +93,16 @@ data class ErrorResponse(val error: String = "오류")
 
 @Serializable
 data class TranscribeResponse(val text: String = "", val model: String = "")
+
+/** 서버 items 한 건. data 는 종류별 JSON */
+@Serializable
+data class SyncItem(val kind: String, val uid: String, val updatedAt: Long, val deleted: Boolean = false, val data: JsonObject)
+
+@Serializable
+data class PullResponse(val items: List<SyncItem> = emptyList(), val cursor: Long = 0)
+
+@Serializable
+data class PushRequest(val items: List<SyncItem>)
+
+@Serializable
+data class PushResponse(val received: Int = 0, val applied: Int = 0, val cursor: Long = 0)

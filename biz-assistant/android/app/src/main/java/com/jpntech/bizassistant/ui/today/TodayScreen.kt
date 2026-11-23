@@ -63,7 +63,7 @@ fun TodayScreen(
     clipboard: String? = null,
     onUseClipboard: (String) -> Unit = {},
     onDismissClipboard: () -> Unit = {},
-    onOpenPending: (Long) -> Unit = {},
+    onOpenPending: (String) -> Unit = {},
 ) {
     val repo = BizApp.from(LocalContext.current).repository
     val scope = rememberCoroutineScope()
@@ -116,7 +116,7 @@ fun TodayScreen(
                     Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
                         SectionTitle("확인 대기")
                         pending.forEachIndexed { i, p ->
-                            RailItem(last = i == pending.lastIndex, tone = BizColors.Signal, active = true, onClick = { onOpenPending(p.id) }) {
+                            RailItem(last = i == pending.lastIndex, tone = BizColors.Signal, active = true, onClick = { onOpenPending(p.uid) }) {
                                 Text(p.callerHint ?: Labels.source(p.source), style = MaterialTheme.typography.labelSmall, color = BizColors.Signal)
                                 Text(p.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = BizColors.Text)
                                 Text(TimeUtil.formatDateTime(p.createdAt) + "  확인하려면 누르세요", style = MaterialTheme.typography.bodySmall, color = BizColors.Muted)
@@ -138,7 +138,7 @@ fun TodayScreen(
                 Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
                     SectionTitle("기한이 가까운 할 일")
                     if (dueSoon.isEmpty()) EmptyNote("일주일 안에 기한이 오는 할 일이 없습니다.")
-                    dueSoon.forEachIndexed { i, t -> TaskRail(t, last = i == dueSoon.lastIndex) { done -> scope.launch { repo.db.tasks().setDone(t.id, done) } } }
+                    dueSoon.forEachIndexed { i, t -> TaskRail(t, last = i == dueSoon.lastIndex) { done -> scope.launch { repo.setTaskDone(t.uid, done) } } }
                 }
             }
 

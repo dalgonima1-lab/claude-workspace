@@ -30,6 +30,8 @@ data class AppSettings(
     val autoRegister: Boolean = false,
     /** 이 시각 이후에 생긴 녹음만 처리한다 (켠 시점) */
     val autoSince: Long = 0L,
+    /** 서버에서 마지막으로 받은 변경 커서 */
+    val syncCursor: Long = 0L,
 )
 
 class SettingsStore(private val context: Context) {
@@ -43,6 +45,7 @@ class SettingsStore(private val context: Context) {
         val autoProcess = booleanPreferencesKey("auto_process")
         val autoRegister = booleanPreferencesKey("auto_register")
         val autoSince = longPreferencesKey("auto_since")
+        val syncCursor = longPreferencesKey("sync_cursor")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -56,6 +59,7 @@ class SettingsStore(private val context: Context) {
             autoProcess = p[Keys.autoProcess] ?: false,
             autoRegister = p[Keys.autoRegister] ?: false,
             autoSince = p[Keys.autoSince] ?: 0L,
+            syncCursor = p[Keys.syncCursor] ?: 0L,
         )
     }
 
@@ -73,6 +77,7 @@ class SettingsStore(private val context: Context) {
             p[Keys.autoProcess] = next.autoProcess
             p[Keys.autoRegister] = next.autoRegister
             p[Keys.autoSince] = next.autoSince
+            p[Keys.syncCursor] = next.syncCursor
         }
     }
 }

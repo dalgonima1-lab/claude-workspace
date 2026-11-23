@@ -66,7 +66,7 @@ class MainActivity : ComponentActivity() {
     /** 창이 앞으로 올 때 읽은 클립보드 글. 통화 요약을 복사해 오면 오늘 화면이 먼저 제안한다. */
     private val clipboardText = mutableStateOf<String?>(null)
     /** 알림을 눌러 들어온 대기함 id. 화면이 뜨면 바로 확인 카드로 연다. */
-    private val pendingToOpen = mutableStateOf<Long?>(null)
+    private val pendingToOpen = mutableStateOf<String?>(null)
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -75,8 +75,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun readPendingExtra(intent: Intent?) {
-        val id = intent?.getLongExtra(EXTRA_PENDING_ID, -1L) ?: -1L
-        if (id > 0) pendingToOpen.value = id
+        val id = intent?.getStringExtra(EXTRA_PENDING_ID)
+        if (!id.isNullOrBlank()) pendingToOpen.value = id
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // 앞으로 올 때마다 서버와 맞춘다. 웹에서 고친 내용이 바로 반영된다.
+        lifecycleScope.launch { runCatching { BizApp.from(this@MainActivity).sync.syncNow() } }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -139,7 +145,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun MainScaffold(expanded: Boolean, confirmVm: ConfirmViewModel, clipboard: String?, onClipboardHandled: () -> Unit, pendingToOpen: Long?, onPendingOpened: () -> Unit) {
+private fun MainScaffold(expanded: Boolean, confirmVm: ConfirmViewModel, clipboard: String?, onClipboardHandled: () -> Unit, pendingToOpen: String?, onPendingOpened: () -> Unit) {
     val nav = rememberNavController()
     LaunchedEffect(pendingToOpen) {
         if (pendingToOpen != null) {

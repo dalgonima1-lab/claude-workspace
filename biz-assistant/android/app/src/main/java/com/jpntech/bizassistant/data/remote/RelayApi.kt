@@ -44,6 +44,29 @@ class RelayApi(
             json.decodeFromString(DraftReplyResponse.serializer(), it).reply
         }
 
+    suspend fun pullData(since: Long): PullResponse = withContext(Dispatchers.IO) {
+        val token = tokenProvider()
+        if (token.isBlank()) throw RelayException(0, "설정에서 서버 토큰을 먼저 입력하세요")
+        val req = Request.Builder().url(url("/api/data?since=$since")).header("x-app-token", token).get().build()
+        try {
+            client.newCall(req).execute().use { res ->
+                val text = res.body?.string().orEmpty()
+                if (!res.isSuccessful) {
+                    val msg = runCatching { json.decodeFromString(ErrorResponse.serializer(), text).error }.getOrDefault("서버 오류 (${res.code})")
+                    throw RelayException(res.code, msg)
+                }
+                json.decodeFromString(PullResponse.serializer(), text)
+            }
+        } catch (e: IOException) {
+            throw RelayException(0, "서버에 연결하지 못했습니다: ${e.message ?: "네트워크 오류"}")
+        }
+    }
+
+    suspend fun pushData(items: List<SyncItem>): PushResponse =
+        post("/api/data", json.encodeToString(PushRequest.serializer(), PushRequest(items))) {
+            json.decodeFromString(PushResponse.serializer(), it)
+        }
+
     /** 녹음 조각(4MB 이하)을 올려 글자로 받는다. */
     suspend fun transcribe(bytes: ByteArray, contentType: String, callerHint: String?): String = withContext(Dispatchers.IO) {
         val token = tokenProvider()

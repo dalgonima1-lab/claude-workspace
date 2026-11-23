@@ -54,13 +54,13 @@ private const val STALE_DAYS = 14L
 fun OrgsScreen(expanded: Boolean) {
     val repo = BizApp.from(LocalContext.current).repository
     val orgs by remember { repo.db.orgs().all() }.collectAsStateWithLifecycle(emptyList())
-    var selectedId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var selectedUid by rememberSaveable { mutableStateOf<String?>(null) }
     var entityFilter by rememberSaveable { mutableStateOf<String?>(null) }
-    val selected = orgs.firstOrNull { it.id == selectedId }
+    val selected = orgs.firstOrNull { it.uid == selectedUid }
 
     if (expanded) {
         Row(Modifier.fillMaxSize()) {
-            Column(Modifier.width(340.dp).fillMaxHeight()) { OrgList(orgs, selectedId, onSelect = { selectedId = it }) }
+            Column(Modifier.width(340.dp).fillMaxHeight()) { OrgList(orgs, selectedUid, onSelect = { selectedUid = it }) }
             Box(Modifier.width(1.dp).fillMaxHeight().background(BizColors.LineSoft))
             Box(Modifier.fillMaxSize()) {
                 if (selected == null) EmptyNote("왼쪽에서 거래처를 고르면 기록이 여기 나옵니다.", Modifier.padding(20.dp))
@@ -69,11 +69,11 @@ fun OrgsScreen(expanded: Boolean) {
         }
     } else {
         if (selected == null) {
-            OrgList(orgs, null, onSelect = { selectedId = it })
+            OrgList(orgs, null, onSelect = { selectedUid = it })
         } else {
-            BackHandler { selectedId = null }
+            BackHandler { selectedUid = null }
             Column(Modifier.fillMaxSize()) {
-                TextButton(onClick = { selectedId = null }, modifier = Modifier.padding(start = 8.dp, top = 4.dp)) { Text("거래처 목록으로", color = BizColors.Muted) }
+                TextButton(onClick = { selectedUid = null }, modifier = Modifier.padding(start = 8.dp, top = 4.dp)) { Text("거래처 목록으로", color = BizColors.Muted) }
                 OrgTimeline(selected, entityFilter, onFilter = { entityFilter = it })
             }
         }
@@ -94,7 +94,7 @@ private fun orgsSentence(orgs: List<OrgEntity>): String {
 }
 
 @Composable
-private fun OrgList(orgs: List<OrgEntity>, selectedId: Long?, onSelect: (Long) -> Unit) {
+private fun OrgList(orgs: List<OrgEntity>, selectedUid: String?, onSelect: (String) -> Unit) {
     val groups = listOf("client" to "발주처", "partner" to "협력업체", "vendor" to "자재와 외주", "internal" to "내부", "other" to "기타")
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
         item { AssistantBand(kicker = "거래처", voice = voice(orgsSentence(orgs))) }
@@ -102,7 +102,7 @@ private fun OrgList(orgs: List<OrgEntity>, selectedId: Long?, onSelect: (Long) -
             val list = orgs.filter { it.kind == kind }
             if (list.isNotEmpty()) {
                 item { SectionTitle(title, Modifier.padding(start = 20.dp, top = 12.dp)) }
-                items(list.size) { i -> Box(Modifier.padding(horizontal = 20.dp)) { OrgRail(list[i], list[i].id == selectedId, last = i == list.lastIndex, onClick = { onSelect(list[i].id) }) } }
+                items(list.size) { i -> Box(Modifier.padding(horizontal = 20.dp)) { OrgRail(list[i], list[i].uid == selectedUid, last = i == list.lastIndex, onClick = { onSelect(list[i].uid) }) } }
             }
         }
     }
@@ -126,10 +126,10 @@ private fun OrgRail(o: OrgEntity, selected: Boolean, last: Boolean, onClick: () 
 @Composable
 private fun OrgTimeline(org: OrgEntity, entityFilter: String?, onFilter: (String?) -> Unit) {
     val repo = BizApp.from(LocalContext.current).repository
-    val records by remember(org.id) { repo.db.records().forOrg(org.id) }.collectAsStateWithLifecycle(emptyList())
-    val events by remember(org.id) { repo.db.events().forOrg(org.id) }.collectAsStateWithLifecycle(emptyList())
-    val tasks by remember(org.id) { repo.db.tasks().forOrg(org.id) }.collectAsStateWithLifecycle(emptyList())
-    val money by remember(org.id) { repo.db.money().forOrg(org.id) }.collectAsStateWithLifecycle(emptyList())
+    val records by remember(org.uid) { repo.db.records().forOrg(org.uid) }.collectAsStateWithLifecycle(emptyList())
+    val events by remember(org.uid) { repo.db.events().forOrg(org.uid) }.collectAsStateWithLifecycle(emptyList())
+    val tasks by remember(org.uid) { repo.db.tasks().forOrg(org.uid) }.collectAsStateWithLifecycle(emptyList())
+    val money by remember(org.uid) { repo.db.money().forOrg(org.uid) }.collectAsStateWithLifecycle(emptyList())
     val shown = if (entityFilter == null) records else records.filter { it.entity == entityFilter }
 
     val openTasks = tasks.count { !it.done }
@@ -154,9 +154,9 @@ private fun OrgTimeline(org: OrgEntity, entityFilter: String?, onFilter: (String
                 RecordRail(
                     r = r,
                     last = i == shown.lastIndex,
-                    eventLabels = events.filter { it.recordId == r.id }.map { TimeUtil.formatDateTime(it.startMillis) + "  " + it.title },
-                    taskLabels = tasks.filter { it.recordId == r.id }.map { (if (it.done) "완료  " else "") + it.title + (it.due?.let { d -> ", " + TimeUtil.formatDate(d) } ?: "") },
-                    moneyLabels = money.filter { it.recordId == r.id }.map { Labels.moneyKind(it.kind) + "  " + Labels.won(it.amount) + (it.due?.let { d -> ", " + TimeUtil.formatDate(d) } ?: "") },
+                    eventLabels = events.filter { it.recordUid == r.uid }.map { TimeUtil.formatDateTime(it.startMillis) + "  " + it.title },
+                    taskLabels = tasks.filter { it.recordUid == r.uid }.map { (if (it.done) "완료  " else "") + it.title + (it.due?.let { d -> ", " + TimeUtil.formatDate(d) } ?: "") },
+                    moneyLabels = money.filter { it.recordUid == r.uid }.map { Labels.moneyKind(it.kind) + "  " + Labels.won(it.amount) + (it.due?.let { d -> ", " + TimeUtil.formatDate(d) } ?: "") },
                 )
             }
         }

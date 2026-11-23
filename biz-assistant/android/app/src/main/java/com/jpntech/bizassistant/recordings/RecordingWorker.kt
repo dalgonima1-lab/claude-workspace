@@ -24,6 +24,7 @@ import com.jpntech.bizassistant.data.ConfirmDraft
 import com.jpntech.bizassistant.data.db.PendingEntity
 import com.jpntech.bizassistant.data.db.RecordingEntity
 import com.jpntech.bizassistant.data.remote.Analysis
+import com.jpntech.bizassistant.data.sync.SyncEngine
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -140,12 +141,14 @@ class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 db.recordings().upsert(RecordingEntity(rec.mediaId, rec.name, rec.dateAdded, "done", System.currentTimeMillis()))
                 notify(rec.mediaId.toInt(), "등록했습니다: ${a.summary}", "일정 ${saved.calendarWritten}건, 할 일 ${saved.tasksSaved}건" + if (saved.ticketCreated) ", 장애 티켓 1건" else "", null)
             } else {
-                val pendingId = db.pending().insert(
-                    PendingEntity(createdAt = System.currentTimeMillis(), source = "call", rawText = fullText, analysisJson = json.encodeToString(Analysis.serializer(), a), callerHint = callerHint, title = a.summary),
+                val now = System.currentTimeMillis()
+                val pendingUid = SyncEngine.newUid()
+                app.repository.addPending(
+                    PendingEntity(pendingUid, now, "call", fullText, json.encodeToString(Analysis.serializer(), a), callerHint, a.summary, now, true, false),
                 )
-                db.recordings().upsert(RecordingEntity(rec.mediaId, rec.name, rec.dateAdded, "done", System.currentTimeMillis(), pendingId))
+                db.recordings().upsert(RecordingEntity(rec.mediaId, rec.name, rec.dateAdded, "done", now, pendingUid))
                 val who = listOfNotNull(a.counterpart.org, a.counterpart.person).joinToString(" ").ifBlank { callerHint ?: "상대 미상" }
-                notify(rec.mediaId.toInt(), "통화 정리가 준비되었습니다", "$who: ${a.summary}", pendingId)
+                notify(rec.mediaId.toInt(), "통화 정리가 준비되었습니다", "$who: ${a.summary}", pendingUid)
             }
         } catch (e: Exception) {
             db.recordings().upsert(RecordingEntity(rec.mediaId, rec.name, rec.dateAdded, "error", System.currentTimeMillis(), null, e.message))
@@ -182,14 +185,14 @@ class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWor
         return if (Build.VERSION.SDK_INT >= 29) ForegroundInfo(PROGRESS_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC) else ForegroundInfo(PROGRESS_ID, n)
     }
 
-    private fun notify(id: Int, title: String, text: String, pendingId: Long?) {
+    private fun notify(id: Int, title: String, text: String, pendingUid: String?) {
         val ctx = applicationContext
         val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (nm.getNotificationChannel(CHANNEL_PENDING) == null) {
             nm.createNotificationChannel(NotificationChannel(CHANNEL_PENDING, "통화 정리", NotificationManager.IMPORTANCE_HIGH))
         }
         val intent = Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        if (pendingId != null) intent.putExtra(EXTRA_PENDING_ID, pendingId)
+        if (pendingUid != null) intent.putExtra(EXTRA_PENDING_ID, pendingUid)
         val pi = PendingIntent.getActivity(ctx, id, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val n = NotificationCompat.Builder(ctx, CHANNEL_PENDING)
             .setSmallIcon(R.drawable.ic_launcher_foreground)

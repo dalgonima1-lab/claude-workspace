@@ -210,6 +210,25 @@ fun SettingsScreen() {
             ) { Text("저장") }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionTitle("컴퓨터와 동기화")
+                val syncState by app.sync.status.collectAsStateWithLifecycle()
+                val lastSyncAt = syncState.lastSyncAt
+                Text(
+                    when {
+                        syncState.running -> "동기화 중"
+                        syncState.lastError != null -> "마지막 동기화 실패: ${syncState.lastError}"
+                        lastSyncAt != null -> "마지막 동기화 ${com.jpntech.bizassistant.data.TimeUtil.formatDateTime(lastSyncAt)}  (올림 ${syncState.pushed}, 받음 ${syncState.pulled})"
+                        else -> "아직 동기화하지 않았습니다"
+                    },
+                    style = MaterialTheme.typography.bodySmall, color = if (syncState.lastError != null) BizColors.Amber else BizColors.Muted,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { scope.launch { app.sync.syncNow() } }, enabled = !syncState.running) { Text("지금 동기화") }
+                }
+                Text("컴퓨터에서는 브라우저로 ${serverUrl.ifBlank { "서버 주소" }} 에 들어가 같은 토큰을 넣으면 됩니다.", style = MaterialTheme.typography.bodySmall, color = BizColors.Muted)
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SectionTitle("앱 버전")
                 val updateState by UpdateChecker.state.collectAsStateWithLifecycle()
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {

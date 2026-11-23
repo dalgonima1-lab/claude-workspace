@@ -4,12 +4,14 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
 
+/**
+ * 3버전부터 모든 표가 서버와 같은 uid 로 바뀌었다.
+ * 1·2버전 데이터는 Room을 열기 전에 LegacyImporter 가 읽어 두었다가 새 표에 옮겨 넣는다(BizApp 참고).
+ */
 @Database(
     entities = [OrgEntity::class, ProjectEntity::class, RecordEntity::class, EventEntity::class, TaskEntity::class, MoneyEntity::class, TicketEntity::class, PendingEntity::class, RecordingEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -24,18 +26,11 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun recordings(): RecordingDao
 
     companion object {
-        /** 1 → 2: 대기함과 녹음 처리 기록 테이블 추가. 기존 데이터는 그대로 둔다. */
-        private val MIGRATION_1_2 = object : Migration(1, 2) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("CREATE TABLE IF NOT EXISTS `pending` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `createdAt` INTEGER NOT NULL, `source` TEXT NOT NULL, `rawText` TEXT NOT NULL, `analysisJson` TEXT NOT NULL, `callerHint` TEXT, `title` TEXT NOT NULL)")
-                db.execSQL("CREATE TABLE IF NOT EXISTS `recordings` (`mediaId` INTEGER NOT NULL, `displayName` TEXT NOT NULL, `dateAdded` INTEGER NOT NULL, `status` TEXT NOT NULL, `processedAt` INTEGER, `pendingId` INTEGER, `error` TEXT, PRIMARY KEY(`mediaId`))")
-            }
-        }
+        const val NAME = "biz-assistant.db"
 
         fun build(context: Context): AppDatabase =
-            Room.databaseBuilder(context, AppDatabase::class.java, "biz-assistant.db")
-                .addMigrations(MIGRATION_1_2)
-                .fallbackToDestructiveMigrationOnDowngrade()
+            Room.databaseBuilder(context, AppDatabase::class.java, NAME)
+                .fallbackToDestructiveMigration()
                 .build()
     }
 }

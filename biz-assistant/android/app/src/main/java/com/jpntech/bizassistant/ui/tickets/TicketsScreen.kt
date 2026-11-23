@@ -101,7 +101,7 @@ private fun TicketRail(t: TicketEntity, last: Boolean, onAdvance: (TicketEntity)
     }
     RailItem(last = last, tone = tone, active = t.status != "done" && t.urgency == "high") {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("T-${t.id}  ${TimeUtil.relative(t.createdAt)}", style = MaterialTheme.typography.labelSmall, color = BizColors.Muted, modifier = Modifier.weight(1f))
+            Text(TimeUtil.relative(t.createdAt), style = MaterialTheme.typography.labelSmall, color = BizColors.Muted, modifier = Modifier.weight(1f))
             Text(Labels.urgency(t.urgency), style = MaterialTheme.typography.labelSmall, color = tone, fontWeight = FontWeight.SemiBold)
         }
         Text(
