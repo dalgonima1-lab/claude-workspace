@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">사업 비서</string>
+    <string name="share_target_label">사업 비서에 정리</string>
+    <string name="notification_channel_reminders">할 일 알림</string>
+</resources>
