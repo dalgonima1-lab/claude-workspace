@@ -74,7 +74,8 @@ class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 }
                 if (processedAny) break
             }
-            return if (needRetry) Result.retry() else Result.success()
+            if (needRetry) RecordingWatcher.runLater(applicationContext, 2)
+            return Result.success()
         } catch (e: Exception) {
             return Result.retry()
         } finally {
@@ -104,13 +105,15 @@ class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWor
         return out
     }
 
+    /** 녹음이 끝나 파일이 더 자라지 않고, 미디어 저장소가 아직 쓰는 중(IS_PENDING)이 아닐 때만 처리한다. */
     private suspend fun isStable(rec: CallRecording): Boolean {
         if (rec.size <= 0) return false
-        delay(4000)
-        val now = applicationContext.contentResolver.query(rec.uri, arrayOf(MediaStore.Audio.Media.SIZE), null, null, null)?.use { c ->
-            if (c.moveToFirst()) c.getLong(0) else -1L
-        } ?: -1L
-        return now == rec.size
+        delay(5000)
+        val cols = arrayOf(MediaStore.Audio.Media.SIZE, MediaStore.MediaColumns.IS_PENDING)
+        val (now, pending) = applicationContext.contentResolver.query(rec.uri, cols, null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getLong(0) to (c.getInt(1) == 1) else -1L to false
+        } ?: (-1L to false)
+        return now == rec.size && !pending
     }
 
     /** 처리 성공이면 true. 네트워크 연결 실패면 retry 로 표시하고 false (WorkManager 가 다시 부른다). */
@@ -126,6 +129,13 @@ class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWor
             val parts = try {
                 AudioChunker.toWavChunks(applicationContext, rec.uri, tmp)
             } catch (e: Exception) {
+                // 통화 직후에는 파일이 아직 다 써지지 않아 열리지 않는 일이 있다. 세 번까지 잠시 뒤 다시 읽는다.
+                val previous = db.recordings().byMediaId(rec.mediaId)?.error ?: ""
+                val attempt = Regex("""\((\d)/3\)""").find(previous)?.groupValues?.get(1)?.toInt() ?: 0
+                if (attempt < 3) {
+                    db.recordings().upsert(RecordingEntity(rec.mediaId, rec.name, rec.dateAdded, "retry", System.currentTimeMillis(), null, "녹음 파일이 아직 준비되지 않아 잠시 뒤 다시 읽습니다 (${attempt + 1}/3)"))
+                    return false
+                }
                 throw IllegalStateException("녹음을 풀지 못했습니다 (${probe?.mime ?: rec.mime ?: "형식 미상"}, ${probe?.sampleRate ?: 0}Hz): ${e.message}")
             }
             if (parts.isEmpty()) {

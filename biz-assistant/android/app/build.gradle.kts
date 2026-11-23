@@ -14,8 +14,8 @@ android {
         applicationId = "com.jpntech.bizassistant"
         minSdk = 29
         targetSdk = 35
-        versionCode = 13
-        versionName = "0.6.3"
+        versionCode = 14
+        versionName = "0.6.4"
     }
 
     // CI(GitHub Actions)에서는 복호화한 키 파일 경로를 환경 변수로 넘긴다. 없으면 로컬 디버그 키로 서명한다.

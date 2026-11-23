@@ -24,6 +24,7 @@ object RecordingWatcher {
     private const val SWEEP = "recording-sweep"
     private const val NOW = "recording-now"
     private const val AFTER_CALL = "recording-after-call"
+    private const val LATER = "recording-later"
 
     fun hasAudioPermission(context: Context): Boolean {
         val perm = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
@@ -72,6 +73,15 @@ object RecordingWatcher {
             .setBackoffCriteria(BackoffPolicy.LINEAR, 30, TimeUnit.SECONDS)
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(NOW, ExistingWorkPolicy.REPLACE, req)
+    }
+
+    /** 아직 준비되지 않은 녹음이 있을 때 잠시 뒤 다시 본다. */
+    fun runLater(context: Context, minutes: Long) {
+        val req = OneTimeWorkRequestBuilder<RecordingWorker>()
+            .setInitialDelay(minutes, TimeUnit.MINUTES)
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(LATER, ExistingWorkPolicy.REPLACE, req)
     }
 
     fun cancel(context: Context) {
