@@ -65,7 +65,9 @@ class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 for (rec in candidates) {
                     val seen = app.repository.db.recordings().byMediaId(rec.mediaId)
                     // 연결 실패로 미뤄 둔 건(retry)은 항상 다시, 다른 실패(error)는 "지금 녹음 확인"을 눌렀을 때만 다시 시도한다.
-                    if (seen != null && seen.status != "retry" && !(retryErrors && seen.status == "error")) continue
+                    // 10분 넘게 "처리 중"이면 작업이 끊긴 것이므로 다시 한다.
+                    val staleProcessing = seen?.status == "processing" && System.currentTimeMillis() - (seen.processedAt ?: 0L) > 10 * 60 * 1000
+                    if (seen != null && seen.status != "retry" && !staleProcessing && !(retryErrors && seen.status == "error")) continue
                     if (afterCall && System.currentTimeMillis() - rec.dateAdded > 10 * 60 * 1000) continue
                     if (!isStable(rec)) continue
                     runCatching { setForeground(progressInfo("통화 내용을 정리하는 중")) }
@@ -120,7 +122,7 @@ class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWor
     private suspend fun process(rec: CallRecording, autoRegister: Boolean): Boolean {
         val app = BizApp.from(applicationContext)
         val db = app.repository.db
-        db.recordings().upsert(RecordingEntity(rec.mediaId, rec.name, rec.dateAdded, "processing"))
+        db.recordings().upsert(RecordingEntity(rec.mediaId, rec.name, rec.dateAdded, "processing", System.currentTimeMillis()))
         val callerHint = callerFromName(rec.name)
         val tmp = File(applicationContext.cacheDir, "rec-${rec.mediaId}")
         try {
@@ -175,6 +177,12 @@ class RecordingWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 notify(rec.mediaId.toInt(), "통화 정리가 준비되었습니다", "$who: ${a.summary}", pendingUid)
             }
             return true
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // 시스템이 작업을 끊었다. 다음 실행에서 이어서 한다.
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                db.recordings().upsert(RecordingEntity(rec.mediaId, rec.name, rec.dateAdded, "retry", System.currentTimeMillis(), null, "처리가 중단되어 다시 시도합니다"))
+            }
+            throw e
         } catch (e: com.jpntech.bizassistant.data.remote.RelayException) {
             if (e.status == 0) {
                 // 인터넷이 없거나 서버에 닿지 못함: 조용히 미뤄 두고 네트워크가 되면 다시 한다.

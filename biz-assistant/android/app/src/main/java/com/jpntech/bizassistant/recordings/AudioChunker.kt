@@ -60,13 +60,17 @@ object AudioChunker {
         val info = MediaCodec.BufferInfo()
         var inputDone = false
         var outputDone = false
+        var idleRounds = 0
         try {
             while (!outputDone) {
+                // 입력도 출력도 없는 상태가 30초(10ms × 3000) 넘게 이어지면 디코더가 멈춘 것으로 본다.
+                if (++idleRounds > 3000) throw IllegalStateException("디코더가 응답하지 않습니다")
                 if (!inputDone) {
                     val inIdx = codec.dequeueInputBuffer(10_000)
                     if (inIdx >= 0) {
                         val buf = codec.getInputBuffer(inIdx)!!
                         val n = extractor.readSampleData(buf, 0)
+                        idleRounds = 0
                         if (n < 0) {
                             codec.queueInputBuffer(inIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                             inputDone = true
@@ -79,6 +83,7 @@ object AudioChunker {
                 val outIdx = codec.dequeueOutputBuffer(info, 10_000)
                 when {
                     outIdx >= 0 -> {
+                        idleRounds = 0
                         val out = codec.getOutputBuffer(outIdx)!!
                         if (info.size > 0) {
                             out.position(info.offset); out.limit(info.offset + info.size)

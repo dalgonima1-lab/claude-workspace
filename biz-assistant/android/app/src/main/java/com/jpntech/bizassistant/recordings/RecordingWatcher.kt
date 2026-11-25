@@ -59,7 +59,8 @@ object RecordingWatcher {
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setBackoffCriteria(BackoffPolicy.LINEAR, 30, TimeUnit.SECONDS)
             .build()
-        WorkManager.getInstance(context).enqueueUniqueWork(AFTER_CALL, ExistingWorkPolicy.REPLACE, req)
+        // 앞선 통화를 아직 처리 중이면 끊지 않고 뒤에 이어 붙인다.
+        WorkManager.getInstance(context).enqueueUniqueWork(AFTER_CALL, ExistingWorkPolicy.APPEND_OR_REPLACE, req)
     }
 
     fun hasPhonePermission(context: Context): Boolean =
@@ -72,7 +73,7 @@ object RecordingWatcher {
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setBackoffCriteria(BackoffPolicy.LINEAR, 30, TimeUnit.SECONDS)
             .build()
-        WorkManager.getInstance(context).enqueueUniqueWork(NOW, ExistingWorkPolicy.REPLACE, req)
+        WorkManager.getInstance(context).enqueueUniqueWork(NOW, ExistingWorkPolicy.APPEND_OR_REPLACE, req)
     }
 
     /** 아직 준비되지 않은 녹음이 있을 때 잠시 뒤 다시 본다. */
@@ -81,7 +82,7 @@ object RecordingWatcher {
             .setInitialDelay(minutes, TimeUnit.MINUTES)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .build()
-        WorkManager.getInstance(context).enqueueUniqueWork(LATER, ExistingWorkPolicy.REPLACE, req)
+        WorkManager.getInstance(context).enqueueUniqueWork(LATER, ExistingWorkPolicy.APPEND_OR_REPLACE, req)
     }
 
     fun cancel(context: Context) {

@@ -192,7 +192,7 @@ fun SettingsScreen() {
                 }
                 if (recentRecordings.isNotEmpty()) {
                     recentRecordings.forEach { r ->
-                        val label = when (r.status) { "done" -> "처리 완료"; "processing" -> "처리 중"; "empty" -> "말소리 없음"; "skipped" -> "사업 무관"; "retry" -> (r.error ?: "잠시 뒤 다시 시도"); "error" -> "실패: ${r.error ?: ""}"; else -> r.status }
+                        val label = when (r.status) { "done" -> "처리 완료"; "processing" -> "처리 중" + (r.processedAt?.let { " (${com.jpntech.bizassistant.data.TimeUtil.formatTime(it)} 시작)" } ?: ""); "empty" -> "말소리 없음"; "skipped" -> "사업 무관"; "retry" -> (r.error ?: "잠시 뒤 다시 시도"); "error" -> "실패: ${r.error ?: ""}"; else -> r.status }
                         Text("${r.displayName}  $label", style = MaterialTheme.typography.bodySmall, color = if (r.status == "error") BizColors.Amber else BizColors.Muted)
                     }
                 }
